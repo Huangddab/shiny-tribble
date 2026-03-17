@@ -1,0 +1,15 @@
+* text=auto eol=lf
+# For Go files, explicitly set to LF
+*.go text eol=lf
+# For shell scripts, explicitly set to LF
+*.sh text eol=lf
+# For Makefiles, often LF is preferred
+Makefile text eol=lf
+# For Windows batch files, explicitly set to CRLF
+*.bat text eol=crlf
+# For binary files, prevent any conversion
+*.png binary
+*.jpg binary
+*.dll binary
+*.so binary
+# Treat .so as binary to avoid line ending issues if they are symlinks seen as text

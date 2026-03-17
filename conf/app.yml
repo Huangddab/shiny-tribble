@@ -1,0 +1,34 @@
+version: 202602
+
+# Logging Configuration (0-6)
+# 0:panic 1:fatal 2:error 3:warn 4:info 5:debug 6:trace
+# trace: Record raw response data (for debugging)
+log:
+  level: 4
+  show_caller: false
+
+httpd:
+  uri: :8080
+  mode: test
+  enable_pprof: true
+  
+jwt:
+  secret: "change-me"
+  expire_minutes: 60
+
+session:
+  name: "auth-session"
+  secret: "secret"
+  maxage: 3600
+  secure: false
+
+database:
+  uri: "mongodb://localhost:27017"
+  dbname: "data_server"
+  log: 4
+
+# NATS messaging broker configuration
+nats:
+  uri: ":4222"
+  # Connection establishment timeout
+  timeout: "5s"

@@ -1,0 +1,18 @@
+input:
+  generate:
+    mapping: |
+      root = if count("gen") % 2 == 0 {
+        {"ID": "chemr", "IntAttribute": 123, "BooleanAttribute": true}
+      } else {
+        {"ID": "chemr2", "IntAttribute": 234, "BooleanAttribute": true}
+      }
+    interval: 1s
+
+pipeline:
+  processors:
+    - grule:
+        fact_name: "MF"  
+        rule_file: "conf/rules/basic.grl"  
+
+output:
+  stdout: {}

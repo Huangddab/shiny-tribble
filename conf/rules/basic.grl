@@ -1,0 +1,11 @@
+rule CheckAge "Check if the IntAttribute is high enough" salience 10 {
+    when
+        MF["IntAttribute"] > 200.0 && MF["BooleanAttribute"] == true
+    then
+        Log("Found high int attribute for ID: " + MF["ID"]);
+        
+        MF["WhatToSay"] = "Let say: Hello " + MF["ID"];
+        MF["Status"] = "Approved";
+        
+        Retract("CheckAge");
+}

@@ -1,0 +1,43 @@
+services:
+  nats:
+    image: it.enboso.com:8080/wm/nats:latest
+    container_name: nats
+    restart: unless-stopped
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    networks:
+      - internal-network
+
+  mongo:
+    image: it.enboso.com:8080/wm/mongo:5.0
+    container_name: mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+      - "27018:27018"
+    networks:
+      - internal-network
+
+  # minio:
+  #   image: it.enboso.com:8080/wm/minio:latest
+  #   container_name: minio
+  #   restart: always
+  #   ports:
+  #     - 9000:9000
+  #     - 9001:9001
+  #   environment:
+  #     - TZ=Asia/Shanghai
+  #     - MINIO_ROOT_USER=enboso
+  #     - MINIO_ROOT_PASSWORD=enboso334968
+  #   volumes:
+  #     - ./data/minio/data:/data
+  #     # - /usr/share/zoneinfo:/usr/share/zoneinfo:ro
+  #   command: server /data --console-address ":9001"
+  #   networks:
+  #     - internal-network
+
+networks:
+  internal-network:
+    external: true
+    name: internal-br
