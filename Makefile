@@ -1,7 +1,10 @@
 APP_NAME=app.exe
 
 run:
-	air -- bento run
+	air --
+
+test:
+	go run main.go bento -c conf/bento/basic.yaml
 
 build:
 	go build -o build/$(APP_NAME) .
