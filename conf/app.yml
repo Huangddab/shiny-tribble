@@ -32,3 +32,4 @@ nats:
   uri: ":4222"
   # Connection establishment timeout
   timeout: "5s"
+  
