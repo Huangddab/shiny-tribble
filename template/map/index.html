@@ -1,0 +1,27 @@
+{{define "map/index.html"}}
+
+<!DOCTYPE html>
+<html lang="utf-8">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Map View</title>
+    {{template "common/header.html"}}
+    <link rel="stylesheet" href="/assets/css/map.css">
+</head>
+
+
+
+<body>
+    <h1>Map View</h1>
+    <div id="map-container">
+        <!-- Map content will be rendered here -->
+    </div>
+    <script src="/assets/js/map.js"></script>
+</body>
+
+{{template "common/footer.html"}}
+
+</html>
+
+{{end}}

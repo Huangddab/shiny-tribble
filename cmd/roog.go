@@ -57,6 +57,9 @@ func initCommands() {
 
 	// Initialize bento commands next
 	initBentoCommands()
+
+	// Initialize httpd commands last
+	initHttpdCommand()
 }
 
 // initViper initializes configuration
