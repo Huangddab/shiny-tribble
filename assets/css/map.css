@@ -1,0 +1,4 @@
+   #map-container {
+        width: 100%;
+        height: 1020px; /* 必须设置具体高度或使用绝对定位铺满 */
+    }

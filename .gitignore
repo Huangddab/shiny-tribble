@@ -3,4 +3,4 @@
 .claude/
 build/*
 tmp/*
-docker
+docker/data/map4

@@ -1,0 +1,15 @@
+services:
+  mapserver:
+    image: maptiler/tileserver-gl
+    container_name: tileserver
+    ports:
+      - 8081:8080
+    volumes:
+      - ./data/tileserver:/data
+    networks:
+      - internal-network
+
+networks:
+  internal-network:
+    external: true
+    name: internal-br
