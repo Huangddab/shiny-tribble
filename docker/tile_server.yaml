@@ -1,6 +1,6 @@
 services:
   mapserver:
-    image: maptiler/tileserver-gl
+    image: it.enboso.com:8080/wm/tileserver-gl:latest
     container_name: tileserver
     ports:
       - 8081:8080
