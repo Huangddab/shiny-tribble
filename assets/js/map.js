@@ -1,8 +1,11 @@
 // 将地图初始视图中心设置为东华智造园
 var map = L.map('map-container').setView([22.610, 113.840], 16);
 
+// var tileServerUrl = 'http://localhost:8081/data/shenzhen/{z}/{x}/{y}.png';
+var tileServerUrl = 'http://192.168.5.215:8081/data/shenzhen/{z}/{x}/{y}.png';
+
 // 添加瓦片图层
-L.tileLayer('http://192.168.5.215:8081/data/shenzhen/{z}/{x}/{y}.png', {
+L.tileLayer(tileServerUrl, {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
 }).addTo(map);
 
