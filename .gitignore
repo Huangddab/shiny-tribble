@@ -3,4 +3,4 @@
 .claude/
 build/*
 tmp/*
-docker/data
+docker/data/*
