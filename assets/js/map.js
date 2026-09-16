@@ -1,12 +1,20 @@
-// 将地图初始视图中心设置为东华智造园
-var map = L.map('map-container').setView([22.610, 113.840], 16);
+var map = L.map('map-container', {
+    minZoom: 16,
+    maxZoom: 18
+}).setView([22.6335, 113.9035], 17);
 
-// var tileServerUrl = 'http://localhost:8081/data/shenzhen/{z}/{x}/{y}.png';
-var tileServerUrl = 'http://192.168.5.215:8081/data/shenzhen/{z}/{x}/{y}.png';
+var tileServerUrl = 'http://localhost:8081/data/baoan/{z}/{x}/{y}.png';
 
-// 添加瓦片图层
 L.tileLayer(tileServerUrl, {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    minZoom: 16,
+    maxZoom: 18,
+    maxNativeZoom: 18,
+    attribution: ''
+}).addTo(map);
+
+L.control.scale({
+    metric: true,
+    imperial: false
 }).addTo(map);
 
 // 在瓦片中心添加标记
