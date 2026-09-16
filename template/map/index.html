@@ -1,29 +1,27 @@
 {{define "map/index.html"}}
 
 <!DOCTYPE html>
-<html lang="utf-8">
+<html lang="zh-CN">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <title>Map View</title>
-    {{template "common/header.html"}}
-    <link rel="stylesheet" href="/assets/leaflet/leaflet.css" />
-       <link rel="stylesheet" href="/assets/css/map.css?random=123456" />
-    <script src="/assets/leaflet/leaflet.js"></script>
-    <!-- 只需要这一行 bundled 版本 -->
-    <script src="https://unpkg.com/leaflet.vectorgrid@latest/dist/Leaflet.VectorGrid.bundled.js"></script>
+
+    <link rel="stylesheet" href="/assets/leaflet/leaflet.css?v=20260916">
+    <link rel="stylesheet" href="/assets/css/map.css?v=20260916">
+
+    <script src="/assets/leaflet/leaflet.js?v=20260916"></script>
 </head>
 
 <body>
-    <h1>Map View</h1>
-    <div id="map-container">
-        <!-- Map content will be rendered here -->
-    </div>
-    <script src="/assets/js/map.js?random=1234562"></script>
-</body>
 
-{{template "common/footer.html"}}
+    <div id="map-container"></div>
+
+    <script src="/assets/js/map.js?v=202609161930"></script>
+
+</body>
 
 </html>
 

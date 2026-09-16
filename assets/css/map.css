@@ -1,4 +1,12 @@
-   #map-container {
-        width: 100%;
-        height: 1020px; /* 必须设置具体高度或使用绝对定位铺满 */
-    }
+html,
+body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+#map-container {
+    width: 100vw;
+    height: 100vh;
+}
