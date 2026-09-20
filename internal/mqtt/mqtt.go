@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	paho "github.com/eclipse/paho.mqtt.golang"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -19,7 +20,7 @@ func InitializedClient(ctx context.Context) {
 		var err error
 		_client, err = NewClient()
 		if err != nil {
-			panic(err)
+			logrus.Warnf("mqtt client is unavailable: %v", err)
 		}
 	})
 }

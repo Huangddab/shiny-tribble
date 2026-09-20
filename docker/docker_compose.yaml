@@ -1,0 +1,32 @@
+services:
+  mapserver:
+    image: it.enboso.com:8080/wm/tileserver-gl:latest
+    container_name: tileserver
+    ports:
+      - 8081:8080
+    volumes:
+      - ./data/tileserver:/data
+    networks:
+      - internal-network
+
+  mqtt:
+    image: eclipse-mosquitto:2
+    container_name: chem-mqtt
+    ports:
+      - 1883:1883
+      - 9001:9001
+    volumes:
+      - ./data/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mqtt-data:/mosquitto/data
+      - mqtt-log:/mosquitto/log
+    networks:
+      - internal-network
+
+volumes:
+  mqtt-data:
+  mqtt-log:
+
+networks:
+  internal-network:
+    external: true
+    name: internal-br

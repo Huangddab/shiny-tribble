@@ -2,6 +2,7 @@ package mqtt
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	paho "github.com/eclipse/paho.mqtt.golang"
@@ -16,7 +17,14 @@ type Config struct {
 }
 
 type Client struct {
-	client paho.Client
+	client        paho.Client
+	mu            sync.RWMutex
+	subscriptions map[string]subscription
+}
+
+type subscription struct {
+	qos      byte
+	callback paho.MessageHandler
 }
 
 func NewClient() (*Client, error) {
@@ -48,16 +56,19 @@ func Connect(config Config) (*Client, error) {
 	options.SetConnectRetry(true)
 	options.SetConnectRetryInterval(2 * time.Second)
 
+	client := &Client{subscriptions: make(map[string]subscription)}
+	options.SetOnConnectHandler(func(paho.Client) {
+		client.resubscribe()
+	})
 	mqttClient := paho.NewClient(options)
+	client.client = mqttClient
 
 	token := mqttClient.Connect()
 	if token.Wait() && token.Error() != nil {
 		return nil, fmt.Errorf("connect mqtt broker: %w", token.Error())
 	}
 
-	return &Client{
-		client: mqttClient,
-	}, nil
+	return client, nil
 }
 
 func (client *Client) Close() {
@@ -85,5 +96,26 @@ func (client *Client) Subscribe(topic string, qos byte, callback paho.MessageHan
 
 	token := client.client.Subscribe(topic, qos, callback)
 	token.Wait()
-	return token.Error()
+	if err := token.Error(); err != nil {
+		return err
+	}
+	client.mu.Lock()
+	client.subscriptions[topic] = subscription{qos: qos, callback: callback}
+	client.mu.Unlock()
+	return nil
+}
+
+func (client *Client) resubscribe() {
+	client.mu.RLock()
+	subscriptions := make(map[string]subscription, len(client.subscriptions))
+	for topic, subscription := range client.subscriptions {
+		subscriptions[topic] = subscription
+	}
+	client.mu.RUnlock()
+	for topic, subscription := range subscriptions {
+		token := client.client.Subscribe(topic, subscription.qos, subscription.callback)
+		if token.Wait() && token.Error() != nil {
+			continue
+		}
+	}
 }

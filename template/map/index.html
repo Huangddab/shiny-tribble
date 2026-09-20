@@ -6,21 +6,41 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Map View</title>
+    <title>化学侦检数据平台 · 指挥态势</title>
     {{template "common/header.html"}}
     <link rel="stylesheet" href="/assets/leaflet/leaflet.css" />
-       <link rel="stylesheet" href="/assets/css/map.css?random=123456" />
+    <link rel="stylesheet" href="/assets/css/map.css" />
     <script src="/assets/leaflet/leaflet.js"></script>
-    <!-- 只需要这一行 bundled 版本 -->
-    <script src="https://unpkg.com/leaflet.vectorgrid@latest/dist/Leaflet.VectorGrid.bundled.js"></script>
 </head>
 
 <body>
-    <h1>Map View</h1>
-    <div id="map-container">
-        <!-- Map content will be rendered here -->
-    </div>
-    <script src="/assets/js/map.js?random=1234562"></script>
+    <main class="command-screen">
+        <header class="topbar">
+            <div class="brand-lockup"><span class="brand-mark">C</span><div><p class="eyebrow">CHEMICAL RECONNAISSANCE NETWORK</p><h1>化学侦检数据平台</h1></div></div>
+            <div class="topbar-meta"><span class="live-dot"></span><span>实时指挥态势</span><span class="divider"></span><span id="system-time">--:--:--</span><span class="connection-pill"><i></i> 数据链路正常</span></div>
+        </header>
+
+        <section class="metric-grid" aria-label="平台概览">
+            <article class="metric-card metric-primary"><div class="metric-label">设备总数 <span>DEVICE FLEET</span></div><strong id="metric-total">--</strong><div class="metric-foot"><span class="metric-accent">●</span> 设计容量 390 台</div></article>
+            <article class="metric-card"><div class="metric-label">在线设备 <span>ONLINE</span></div><strong id="metric-online">--</strong><div class="metric-foot positive"><span>▲</span> 运行稳定</div></article>
+            <article class="metric-card metric-alert"><div class="metric-label">当前报警 <span>ACTIVE ALERTS</span></div><strong id="metric-alerts">--</strong><div class="metric-foot alert-text"><span>●</span> 需立即关注</div></article>
+            <article class="metric-card"><div class="metric-label">离线设备 <span>OFFLINE</span></div><strong id="metric-offline">--</strong><div class="metric-foot"><span class="metric-muted">●</span> 15秒无遥测判定</div></article>
+            <article class="metric-card"><div class="metric-label">训练设备 <span>TRAINING MODE</span></div><strong id="metric-training">--</strong><div class="metric-foot training-text"><span>◆</span> 模式切换闭环中</div></article>
+        </section>
+
+        <section class="main-grid">
+            <article class="panel map-panel"><div class="panel-heading"><div><span class="section-kicker">LIVE MAP / 01</span><h2>现场设备分布</h2></div><div class="map-legend"><span><i class="legend-normal"></i>正常</span><span><i class="legend-alert"></i>报警</span><span><i class="legend-offline"></i>离线</span></div></div><div id="map-container"></div><div class="map-caption"><span>深圳 · 宝安区</span><span id="map-updated">数据更新 --</span></div></article>
+            <aside class="panel alert-panel"><div class="panel-heading"><div><span class="section-kicker">EVENT STREAM / 02</span><h2>实时报警</h2></div><span class="panel-count" id="alert-count">0</span></div><div id="alert-list" class="alert-list"></div><div class="panel-footer"><span>报警结束以设备 Events type=1 为准</span><span class="arrow">↗</span></div></aside>
+        </section>
+
+        <section class="bottom-grid">
+            <article class="panel device-panel"><div class="panel-heading"><div><span class="section-kicker">TELEMETRY / 03</span><h2>设备态势</h2></div><span class="subtle-label">实时遥测 · 2秒周期</span></div><div class="table-wrap"><table><thead><tr><th>设备</th><th>编组</th><th>状态</th><th>模式</th><th>当前浓度</th><th>电量</th><th>信号</th><th>最近上报</th></tr></thead><tbody id="device-table"></tbody></table></div></article>
+            <article class="panel command-panel"><div class="panel-heading"><div><span class="section-kicker">COMMAND LOOP / 04</span><h2>指令执行</h2></div><span class="subtle-label">Notify ACK</span></div><div id="command-list" class="command-list"></div><div class="panel-footer"><span>超时阈值 10 秒 · 不自动重试</span><span class="arrow">↗</span></div></article>
+        </section>
+
+        <section class="panel training-panel"><div class="panel-heading"><div><span class="section-kicker">EXERCISE CONTROL / 05</span><h2>训练任务</h2></div><span class="subtle-label">设备 Telemetry 模式为准</span></div><div id="training-list" class="training-list"></div></section>
+    </main>
+    <script src="/assets/js/map.js"></script>
 </body>
 
 {{template "common/footer.html"}}

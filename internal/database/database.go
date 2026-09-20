@@ -92,12 +92,24 @@ func (db *Database) Find(col string, filter any, opts ...*options.FindOptions) (
 	return db.Collection(col).Find(ctx, filter, opts...)
 }
 
-// UpdateOne updates a single document
-func (db *Database) UpdateOne(col string, filter any, update any) (*mongo.UpdateResult, error) {
+func (db *Database) FindAll(col string, filter any, result any, opts ...*options.FindOptions) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	return db.Collection(col).UpdateOne(ctx, filter, update)
+	cursor, err := db.Collection(col).Find(ctx, filter, opts...)
+	if err != nil {
+		return err
+	}
+	defer cursor.Close(ctx)
+	return cursor.All(ctx, result)
+}
+
+// UpdateOne updates a single document
+func (db *Database) UpdateOne(col string, filter any, update any, opts ...*options.UpdateOptions) (*mongo.UpdateResult, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	return db.Collection(col).UpdateOne(ctx, filter, update, opts...)
 }
 
 // UpdateMany updates multiple documents

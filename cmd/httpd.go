@@ -3,6 +3,8 @@ package cmd
 import (
 	"context"
 	"data-server/httpd"
+	"data-server/internal/dashboard"
+	"data-server/internal/database"
 	"data-server/internal/mqtt"
 	"os"
 	"os/signal"
@@ -43,6 +45,11 @@ func runHttpdCommand(cmd *cobra.Command, args []string) {
 	// 初始化MQTT服务
 	mqtt.InitializedClient(ctx)
 	defer mqtt.Stop()
+
+	// 数据库不可用时保留内存模式，不能阻断实时服务
+	database.InitializedDatabase(ctx)
+	defer database.Stop()
+	dashboard.CleanupLegacyData()
 
 	// 初始化HTTP服务
 	httpd.InitializeService(ctx)
