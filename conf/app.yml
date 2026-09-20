@@ -32,4 +32,9 @@ nats:
   uri: ":4222"
   # Connection establishment timeout
   timeout: "5s"
-  
+
+mqtt:
+  broker: "tcp://localhost:1883"
+  client_id: "data-server"
+  username: ""
+  password: ""

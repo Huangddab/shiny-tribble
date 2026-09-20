@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"data-server/httpd"
+	"data-server/internal/mqtt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -38,6 +39,10 @@ func runHttpdCommand(cmd *cobra.Command, args []string) {
 	// ----- Context -----
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// 初始化MQTT服务
+	mqtt.InitializedClient(ctx)
+	defer mqtt.Stop()
 
 	// 初始化HTTP服务
 	httpd.InitializeService(ctx)

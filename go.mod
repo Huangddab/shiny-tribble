@@ -3,7 +3,7 @@ module data-server
 go 1.25.0
 
 require (
-	github.com/gin-contrib/cors v1.7.6
+	github.com/eclipse/paho.mqtt.golang v1.5.1
 	github.com/gin-contrib/pprof v1.5.3
 	github.com/gin-gonic/gin v1.12.0
 	github.com/hyperjumptech/grule-rule-engine v1.20.4

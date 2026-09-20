@@ -1,7 +1,7 @@
 APP_NAME=app.exe
 
 run:
-	air --
+	air -- httpd
 
 test:
 	go run main.go bento -c conf/bento/basic.yaml
