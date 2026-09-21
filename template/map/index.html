@@ -6,7 +6,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>化学侦检数据平台 · 指挥态势</title>
+    <title>化学物质智能监测综合态势平台</title>
     {{template "common/header.html"}}
     <link rel="stylesheet" href="/assets/leaflet/leaflet.css" />
     <link rel="stylesheet" href="/assets/css/map.css" />
@@ -14,32 +14,138 @@
 </head>
 
 <body>
-    <main class="command-screen">
+    <div class="app">
         <header class="topbar">
-            <div class="brand-lockup"><span class="brand-mark">C</span><div><p class="eyebrow">CHEMICAL RECONNAISSANCE NETWORK</p><h1>化学侦检数据平台</h1></div></div>
-            <div class="topbar-meta"><span class="live-dot"></span><span>实时指挥态势</span><span class="divider"></span><span id="system-time">--:--:--</span><span class="connection-pill"><i></i> 数据链路正常</span></div>
+            <div class="brand-lockup"><span class="brand-mark">化</span><div><p class="eyebrow">CUSTOMS CHEMICAL RECON PLATFORM</p><h1>化学物质智能监测综合态势平台</h1></div></div>
+            <nav class="main-nav" aria-label="主导航">
+                <button class="nav-btn active" data-page="dashboard">实时态势</button>
+                <button class="nav-btn" data-page="command">指挥调度</button>
+                <button class="nav-btn" data-page="history">报警历史</button>
+                <button class="nav-btn" data-page="devices">设备管理</button>
+            </nav>
+            <div class="topbar-meta"><span id="system-time">--:--:--</span><span class="divider"></span><span class="connection-pill"><i></i> 数据链路正常</span></div>
         </header>
 
-        <section class="metric-grid" aria-label="平台概览">
-            <article class="metric-card metric-primary"><div class="metric-label">设备总数 <span>DEVICE FLEET</span></div><strong id="metric-total">--</strong><div class="metric-foot"><span class="metric-accent">●</span> 设计容量 390 台</div></article>
-            <article class="metric-card"><div class="metric-label">在线设备 <span>ONLINE</span></div><strong id="metric-online">--</strong><div class="metric-foot positive"><span>▲</span> 运行稳定</div></article>
-            <article class="metric-card metric-alert"><div class="metric-label">当前报警 <span>ACTIVE ALERTS</span></div><strong id="metric-alerts">--</strong><div class="metric-foot alert-text"><span>●</span> 需立即关注</div></article>
-            <article class="metric-card"><div class="metric-label">离线设备 <span>OFFLINE</span></div><strong id="metric-offline">--</strong><div class="metric-foot"><span class="metric-muted">●</span> 15秒无遥测判定</div></article>
-            <article class="metric-card"><div class="metric-label">训练设备 <span>TRAINING MODE</span></div><strong id="metric-training">--</strong><div class="metric-foot training-text"><span>◆</span> 模式切换闭环中</div></article>
-        </section>
+        <main>
+            <section class="page active" id="page-dashboard">
+                <section class="metric-grid" aria-label="平台概览">
+                    <article class="metric-card metric-primary"><div class="metric-label">设备总数 <span>DEVICE FLEET</span></div><strong id="metric-total">--</strong><div class="metric-foot"><span class="metric-accent">●</span> 关区在册设备</div></article>
+                    <article class="metric-card"><div class="metric-label">在线设备 <span>ONLINE</span></div><strong id="metric-online">--</strong><div class="metric-foot positive"><span>▲</span> 运行稳定</div></article>
+                    <article class="metric-card metric-alert"><div class="metric-label">当前报警 <span>ACTIVE ALERTS</span></div><strong id="metric-alerts">--</strong><div class="metric-foot alert-text"><span>●</span> 需立即关注</div></article>
+                    <article class="metric-card"><div class="metric-label">离线设备 <span>OFFLINE</span></div><strong id="metric-offline">--</strong><div class="metric-foot"><span class="metric-muted">●</span> 15秒无遥测判定</div></article>
+                    <article class="metric-card"><div class="metric-label">训练设备 <span>TRAINING MODE</span></div><strong id="metric-training">--</strong><div class="metric-foot training-text"><span>◆</span> 模式切换闭环中</div></article>
+                </section>
 
-        <section class="main-grid">
-            <article class="panel map-panel"><div class="panel-heading"><div><span class="section-kicker">LIVE MAP / 01</span><h2>现场设备分布</h2></div><div class="map-legend"><span><i class="legend-normal"></i>正常</span><span><i class="legend-alert"></i>报警</span><span><i class="legend-offline"></i>离线</span></div></div><div id="map-container"></div><div class="map-caption"><span>深圳 · 宝安区</span><span id="map-updated">数据更新 --</span></div></article>
-            <aside class="panel alert-panel"><div class="panel-heading"><div><span class="section-kicker">EVENT STREAM / 02</span><h2>实时报警</h2></div><span class="panel-count" id="alert-count">0</span></div><div id="alert-list" class="alert-list"></div><div class="panel-footer"><span>报警结束以设备 Events type=1 为准</span><span class="arrow">↗</span></div></aside>
-        </section>
+                <section class="main-grid">
+                    <article class="panel map-panel"><div class="panel-heading"><div><span class="section-kicker">LIVE MAP / 01</span><h2>关区设备实时分布</h2></div><div class="map-legend"><span><i class="legend-normal"></i>正常</span><span><i class="legend-alert"></i>报警</span><span><i class="legend-offline"></i>离线</span></div></div><div id="map-container"></div><div class="map-caption"><span>离线地图 · 宝安区</span><span id="map-updated">数据更新 --</span></div></article>
+                    <aside class="panel alert-panel"><div class="panel-heading"><div><span class="section-kicker">EVENT STREAM / 02</span><h2>实时报警</h2></div><span class="panel-count" id="alert-count">0</span></div><div id="alert-list" class="alert-list"></div><div class="panel-footer"><span>报警结束以设备 Events type=1 为准</span><span class="arrow">↗</span></div></aside>
+                </section>
 
-        <section class="bottom-grid">
-            <article class="panel device-panel"><div class="panel-heading"><div><span class="section-kicker">TELEMETRY / 03</span><h2>设备态势</h2></div><span class="subtle-label">实时遥测 · 2秒周期</span></div><div class="table-wrap"><table><thead><tr><th>设备</th><th>编组</th><th>状态</th><th>模式</th><th>当前浓度</th><th>电量</th><th>信号</th><th>最近上报</th></tr></thead><tbody id="device-table"></tbody></table></div></article>
-            <article class="panel command-panel"><div class="panel-heading"><div><span class="section-kicker">COMMAND LOOP / 04</span><h2>指令执行</h2></div><span class="subtle-label">Notify ACK</span></div><div id="command-list" class="command-list"></div><div class="panel-footer"><span>超时阈值 10 秒 · 不自动重试</span><span class="arrow">↗</span></div></article>
-        </section>
+                <section class="bottom-grid">
+                    <article class="panel device-panel"><div class="panel-heading"><div><span class="section-kicker">TELEMETRY / 03</span><h2>设备态势</h2></div><span class="subtle-label">实时遥测 · 2秒周期</span></div><div class="table-wrap"><table><thead><tr><th>设备</th><th>编组</th><th>状态</th><th>模式</th><th>当前浓度</th><th>电量</th><th>信号</th><th>最近上报</th></tr></thead><tbody id="device-table"></tbody></table></div></article>
+                    <article class="panel command-panel"><div class="panel-heading"><div><span class="section-kicker">COMMAND LOOP / 04</span><h2>指令执行</h2></div><span class="subtle-label">Notify ACK</span></div><div id="command-list" class="command-list"></div><div class="panel-footer"><span>超时阈值 10 秒 · 不自动重试</span><span class="arrow">↗</span></div></article>
+                </section>
 
-        <section class="panel training-panel"><div class="panel-heading"><div><span class="section-kicker">EXERCISE CONTROL / 05</span><h2>训练任务</h2></div><span class="subtle-label">设备 Telemetry 模式为准</span></div><div id="training-list" class="training-list"></div></section>
-    </main>
+                <section class="panel training-panel"><div class="panel-heading"><div><span class="section-kicker">EXERCISE CONTROL / 05</span><h2>训练任务</h2></div><span class="subtle-label">前往「指挥调度」发起或结束训练</span></div><div id="training-list" class="training-list"></div></section>
+            </section>
+
+            <section class="page" id="page-command">
+                <section class="command-grid">
+                    <article class="panel form-panel">
+                        <div class="panel-heading"><div><span class="section-kicker">DIRECT COMMAND / 01</span><h2>单设备 / 全体指令</h2></div></div>
+                        <form class="command-form" id="single-command-form">
+                            <div class="form-row">
+                                <label>下发目标<select id="single-device" required></select></label>
+                                <label>指令类型<select id="single-type">
+                                        <option value="0">文本通知</option>
+                                        <option value="1">动作指令</option>
+                                        <option value="2">参数配置</option>
+                                        <option value="4">模式切换</option>
+                                    </select></label>
+                            </div>
+                            <div class="dynamic-fields" id="single-fields"></div>
+                            <div class="form-actions"><button type="submit" class="btn btn-primary">下发指令</button><span class="feedback" id="single-feedback"></span></div>
+                        </form>
+                    </article>
+
+                    <article class="panel form-panel">
+                        <div class="panel-heading"><div><span class="section-kicker">GROUP COMMAND / 02</span><h2>编队指令</h2></div></div>
+                        <form class="command-form" id="group-command-form">
+                            <div class="form-row">
+                                <label>目标编队<select id="group-target" required></select></label>
+                                <label>指令类型<select id="group-type">
+                                        <option value="0">文本通知</option>
+                                        <option value="1">动作指令</option>
+                                        <option value="2">参数配置</option>
+                                        <option value="4">模式切换</option>
+                                    </select></label>
+                            </div>
+                            <div class="dynamic-fields" id="group-fields"></div>
+                            <div class="form-actions"><button type="submit" class="btn btn-primary">下发编队指令</button><span class="feedback" id="group-feedback"></span></div>
+                        </form>
+                    </article>
+
+                    <article class="panel form-panel">
+                        <div class="panel-heading"><div><span class="section-kicker">POSITION SHARE / 03</span><h2>编队位置共享</h2></div></div>
+                        <form class="command-form" id="position-share-form">
+                            <div class="form-row"><label>目标编队<select id="position-group" required></select></label></div>
+                            <div class="form-actions"><button type="submit" class="btn btn-primary">下发位置共享</button><span class="feedback" id="position-feedback"></span></div>
+                            <p class="form-hint">单次最多下发 16 台设备最新位置，无需 ACK。</p>
+                        </form>
+                    </article>
+
+                    <article class="panel form-panel">
+                        <div class="panel-heading"><div><span class="section-kicker">TRAINING CONTROL / 04</span><h2>训练管理</h2></div></div>
+                        <form class="command-form" id="training-start-form">
+                            <div class="form-row">
+                                <label>参训编队<select id="training-group" required></select></label>
+                                <label>训练名称<input type="text" id="training-name" placeholder="例如：DMMP 扩散演练" required></label>
+                            </div>
+                            <label class="checkbox-row"><input type="checkbox" id="training-source-toggle">附加模拟污染源参数</label>
+                            <div class="form-row" id="training-source-fields" hidden>
+                                <label>模拟物质<input type="text" id="training-substance" placeholder="DMMP"></label>
+                                <label>模拟浓度 ppm<input type="number" step="any" id="training-conc" placeholder="5"></label>
+                                <label>影响半径 m<input type="number" step="any" id="training-radius" placeholder="200"></label>
+                                <label>扩散条件<input type="text" id="training-diffusion" placeholder="低风速扩散"></label>
+                            </div>
+                            <div class="form-actions"><button type="submit" class="btn btn-primary">开始训练</button><span class="feedback" id="training-feedback"></span></div>
+                        </form>
+                        <div class="panel-subheading">进行中的训练</div>
+                        <div id="active-training-list" class="training-list"></div>
+                    </article>
+                </section>
+            </section>
+
+            <section class="page" id="page-history">
+                <article class="panel">
+                    <div class="panel-heading"><div><span class="section-kicker">ALERT ARCHIVE / 01</span><h2>报警历史查询</h2></div></div>
+                    <form class="command-form" id="history-filter-form">
+                        <div class="form-row">
+                            <label>设备编号<input type="text" id="history-device" placeholder="留空查询全部" list="known-devices"></label>
+                            <label>所属编队<input type="text" id="history-group" placeholder="留空查询全部" list="known-groups"></label>
+                            <label>开始时间<input type="datetime-local" id="history-from"></label>
+                            <label>结束时间<input type="datetime-local" id="history-to"></label>
+                        </div>
+                        <div class="form-actions"><button type="submit" class="btn btn-primary">查询记录</button><button type="button" class="btn" id="history-export-btn">导出 JSON</button><span class="feedback" id="history-feedback"></span></div>
+                    </form>
+                </article>
+                <article class="panel">
+                    <div class="table-wrap"><table><thead><tr><th>设备</th><th>编队</th><th>报警物</th><th>跌倒</th><th>开始时间</th><th>结束时间</th><th>持续时间</th><th>最高浓度</th><th>结束原因</th><th>确认状态</th></tr></thead><tbody id="history-tbody"></tbody></table></div>
+                </article>
+            </section>
+
+            <section class="page" id="page-devices">
+                <article class="panel">
+                    <div class="panel-heading"><div><span class="section-kicker">DEVICE REGISTRY / 01</span><h2>设备管理</h2></div><span class="subtle-label">重命名 / 编队分配</span></div>
+                    <div class="table-wrap"><table><thead><tr><th>设备编号</th><th>名称</th><th>编队</th><th>状态</th><th>模式</th><th>电量</th><th>操作</th></tr></thead><tbody id="devices-manage-tbody"></tbody></table></div>
+                </article>
+            </section>
+        </main>
+
+        <datalist id="known-devices"></datalist>
+        <datalist id="known-groups"></datalist>
+        <div class="toast" id="toast"></div>
+    </div>
     <script src="/assets/js/map.js"></script>
 </body>
 
