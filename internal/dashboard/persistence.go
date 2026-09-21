@@ -26,11 +26,12 @@ func persistCommand(command model.DashboardCommand, timestamp int64) {
 	for _, result := range command.Results {
 		results = append(results, commandResultRecord{DeviceID: result.DeviceID, Result: result.Result, Reason: result.Reason})
 	}
-	document := modelCommandRecord{ID: command.ID, Action: command.Action, Target: command.Target, Result: command.Result, Progress: command.Progress, Results: results, CreatedAt: command.CreatedAtUnix, UpdatedAt: timestamp, TimeoutAt: command.TimeoutAtUnix}
+	document := modelCommandRecord{Action: command.Action, Target: command.Target, Result: command.Result, Progress: command.Progress, Results: results, CreatedAt: command.CreatedAtUnix, UpdatedAt: timestamp, TimeoutAt: command.TimeoutAtUnix}
 	if database.GetDatabase() == nil {
 		return
 	}
-	if _, err := database.UpdateOne("dashboard_commands", bson.M{"_id": command.ID}, bson.M{"$set": document, "$setOnInsert": bson.M{"_id": command.ID, "created_at": timestamp}}, options.Update().SetUpsert(true)); err != nil {
+	// _id must never appear in $set (Mongo rejects modifying the immutable _id field), so $setOnInsert carries it instead
+	if _, err := database.UpdateOne("dashboard_commands", bson.M{"_id": command.ID}, bson.M{"$set": document, "$setOnInsert": bson.M{"_id": command.ID}}, options.Update().SetUpsert(true)); err != nil {
 		logrus.Warnf("persist dashboard_commands failed: %v", err)
 	}
 }
@@ -46,7 +47,7 @@ func loadCommandHistory(result, target string, limit int) ([]model.DashboardComm
 	if target != "" {
 		filter["target"] = bson.M{"$regex": target}
 	}
-	var records []modelCommandRecord
+	var records []commandRecordRow
 	if err := database.FindAll("dashboard_commands", filter, &records, options.Find().SetSort(bson.D{{Key: "updated_at", Value: -1}}).SetLimit(int64(limit))); err != nil {
 		return nil, err
 	}
@@ -232,7 +233,19 @@ func cloneDashboardCommand(command model.DashboardCommand) model.DashboardComman
 }
 
 type modelCommandRecord struct {
-	ID        string                `bson:"-"`
+	Action    string                `bson:"action"`
+	Target    string                `bson:"target"`
+	Result    string                `bson:"result"`
+	Progress  int                   `bson:"progress"`
+	Results   []commandResultRecord `bson:"results"`
+	CreatedAt int64                 `bson:"created_at"`
+	UpdatedAt int64                 `bson:"updated_at"`
+	TimeoutAt int64                 `bson:"timeout_at,omitempty"`
+}
+
+// commandRecordRow decodes the _id back into a usable command ID for history reads
+type commandRecordRow struct {
+	ID        string                `bson:"_id"`
 	Action    string                `bson:"action"`
 	Target    string                `bson:"target"`
 	Result    string                `bson:"result"`

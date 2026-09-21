@@ -58,6 +58,7 @@ func (s *HttpdService) Start() error {
 			logrus.Fatalf("failed to start server: %v", err)
 		}
 	}()
+	go s.dashboard.RunMaintenance(s.ctx, time.Second)
 	logrus.Infof("httpd service started on %s", s.server.Addr)
 	return nil
 }

@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -183,9 +184,10 @@ func (store *Store) SendNotify(deviceID string, notifyType int, message any) (st
 			targets = append(targets, id)
 		}
 		store.mu.RUnlock()
-		return store.sendNotify(targets, notifyType, message)
+		// "all" 使用协议约定的广播 Topic，而非逐设备单播
+		return store.sendNotify(targets, notifyType, message, true)
 	}
-	return store.sendNotify([]string{deviceID}, notifyType, message)
+	return store.sendNotify([]string{deviceID}, notifyType, message, false)
 }
 
 func (store *Store) SendGroupNotify(group string, notifyType int, message any) (string, error) {
@@ -200,7 +202,7 @@ func (store *Store) SendGroupNotify(group string, notifyType int, message any) (
 	if len(targets) == 0 {
 		return "", fmt.Errorf("group %s has no devices", group)
 	}
-	return store.sendNotify(targets, notifyType, message)
+	return store.sendNotify(targets, notifyType, message, false)
 }
 
 func (store *Store) StartTraining(group, name string) (model.DashboardTraining, error) {
@@ -280,7 +282,7 @@ func (store *Store) TrainingHistory(limit int) ([]model.DashboardTraining, error
 	return history, nil
 }
 
-func (store *Store) sendNotify(targets []string, notifyType int, message any) (string, error) {
+func (store *Store) sendNotify(targets []string, notifyType int, message any, broadcast bool) (string, error) {
 	if len(targets) == 0 {
 		return "", fmt.Errorf("no target devices")
 	}
@@ -322,12 +324,14 @@ func (store *Store) sendNotify(targets []string, notifyType int, message any) (s
 		go persistCommand(command, time.Now().Unix())
 		go persistAudit("system", "command.send", commandID, "accepted", map[string]any{"type": notifyType, "target": command.Target})
 	}
-	for _, target := range targets {
-		topic := "/chem/notify"
-		if target != "" && target != "all" {
-			topic = "/chem/" + target + "/notify"
+	if broadcast {
+		if err := mqtt.Publish("/chem/notify", qos, false, data); err != nil {
+			return "", err
 		}
-		if err := mqtt.Publish(topic, qos, false, data); err != nil {
+		return commandID, nil
+	}
+	for _, target := range targets {
+		if err := mqtt.Publish("/chem/"+target+"/notify", qos, false, data); err != nil {
 			return "", err
 		}
 	}
@@ -490,7 +494,7 @@ func (store *Store) ShareGroupPositions(group string) error {
 	}
 	message := map[string]any{"devices": devices}
 	for _, deviceID := range targetIDs {
-		if _, err := store.sendNotify([]string{deviceID}, 3, message); err != nil {
+		if _, err := store.sendNotify([]string{deviceID}, 3, message, false); err != nil {
 			return err
 		}
 	}
@@ -729,10 +733,24 @@ func (store *Store) applyEvent(deviceID string, event eventEnvelope, when int64)
 	}
 }
 
-func (store *Store) Snapshot() model.DashboardSnapshot {
-	now := time.Now()
-	store.mu.Lock()
-	defer store.mu.Unlock()
+// RunMaintenance 周期性地在没有请求到来时主动执行离线判定和指令超时判定
+func (store *Store) RunMaintenance(ctx context.Context, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case now := <-ticker.C:
+			store.mu.Lock()
+			store.expireLocked(now)
+			store.mu.Unlock()
+		}
+	}
+}
+
+// expireLocked 判定指令超时和设备离线；调用方必须已持有 store.mu 写锁
+func (store *Store) expireLocked(now time.Time) {
 	for commandID, deadline := range store.commandDeadlines {
 		if now.After(deadline) {
 			if command := store.commands[commandID]; command != nil && command.Result == "pending" {
@@ -749,7 +767,6 @@ func (store *Store) Snapshot() model.DashboardSnapshot {
 			delete(store.commandDeadlines, commandID)
 		}
 	}
-	snapshot := model.DashboardSnapshot{UpdatedAt: now}
 	for deviceID, state := range store.devices {
 		if now.Sub(state.lastSeen) >= 15*time.Second {
 			state.device.Status = "offline"
@@ -758,6 +775,16 @@ func (store *Store) Snapshot() model.DashboardSnapshot {
 		if state.device.Status == "offline" {
 			store.finishAlertLocked(deviceID, "offline", state.lastSeen.Unix(), 0, 0)
 		}
+	}
+}
+
+func (store *Store) Snapshot() model.DashboardSnapshot {
+	now := time.Now()
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	store.expireLocked(now)
+	snapshot := model.DashboardSnapshot{UpdatedAt: now}
+	for _, state := range store.devices {
 		snapshot.Devices = append(snapshot.Devices, state.device)
 		if state.device.Status == "offline" {
 			snapshot.Summary.OfflineDevices++
