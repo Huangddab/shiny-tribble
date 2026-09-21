@@ -14,6 +14,17 @@
 </head>
 
 <body>
+    <section class="login-gate" id="login-gate" hidden>
+        <form class="login-card" id="login-form">
+            <span class="section-kicker">SECURE ACCESS</span>
+            <h2>登录平台</h2>
+            <p>请输入平台账号后查看设备态势。</p>
+            <label>用户名<input id="login-username" name="username" autocomplete="username" required></label>
+            <label>密码<input id="login-password" name="password" type="password" autocomplete="current-password" required></label>
+            <button type="submit" class="btn btn-primary">登录</button>
+            <span class="feedback error" id="login-feedback"></span>
+        </form>
+    </section>
     <div class="app">
         <header class="topbar">
             <div class="brand-lockup"><span class="brand-mark">化</span><div><p class="eyebrow">CUSTOMS CHEMICAL RECON PLATFORM</p><h1>化学物质智能监测综合态势平台</h1></div></div>

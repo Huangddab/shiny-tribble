@@ -1,6 +1,8 @@
 var map = L.map('map-container', { minZoom: 14, maxZoom: 18, zoomControl: false }).setView([22.6335, 113.9035], 17);
 var markers = L.layerGroup().addTo(map);
 var markerViewKey = '';
+var refreshTimer = null;
+var authRequired = false;
 
 L.tileLayer('http://localhost:8081/data/baoan/{z}/{x}/{y}.png', { minZoom: 14, maxZoom: 18, maxNativeZoom: 18, attribution: '' }).addTo(map);
 
@@ -13,6 +15,21 @@ function escapeHtml(value) {
     });
 }
 
+function showLogin() {
+    if (authRequired) { return; }
+    authRequired = true;
+    if (refreshTimer) { clearInterval(refreshTimer); }
+    $('login-gate').hidden = false;
+    $('login-username').focus();
+}
+
+function hideLogin() {
+    authRequired = false;
+    $('login-gate').hidden = true;
+    refresh();
+    refreshTimer = setInterval(refresh, 2000);
+}
+
 function apiRequest(method, url, body) {
     var options = { method: method, headers: {} };
     if (body !== undefined) {
@@ -20,6 +37,7 @@ function apiRequest(method, url, body) {
         options.body = JSON.stringify(body);
     }
     return fetch(url, options).then(function (response) {
+        if (response.status === 401) { showLogin(); }
         if (response.status === 204) { return null; }
         return response.text().then(function (text) {
             var data = null;
@@ -29,6 +47,27 @@ function apiRequest(method, url, body) {
         });
     });
 }
+
+$('login-form').addEventListener('submit', function (event) {
+    event.preventDefault();
+    var feedback = $('login-feedback');
+    feedback.textContent = '登录中…';
+    fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: $('login-username').value, password: $('login-password').value })
+    }).then(function (response) {
+        return response.json().then(function (data) {
+            if (!response.ok) { throw new Error((data && data.error) || '登录失败'); }
+            return data;
+        });
+    }).then(function () {
+        feedback.textContent = '';
+        hideLogin();
+    }).catch(function (error) {
+        feedback.textContent = error.message;
+    });
+});
 
 var toastTimer = null;
 function toast(message, isError) {
@@ -175,7 +214,10 @@ function renderSnapshot(snapshot) {
 }
 
 function refresh() {
-    fetch('/api/dashboard/snapshot').then(function (response) { return response.json(); }).then(renderSnapshot).catch(function () {
+    fetch('/api/dashboard/snapshot').then(function (response) {
+        if (response.status === 401) { showLogin(); }
+        return response.json();
+    }).then(renderSnapshot).catch(function () {
         document.querySelector('.connection-pill').innerHTML = '<i style="background:#ff3b30;box-shadow:0 0 10px #ff3b30"></i> 数据链路异常';
     });
     fetchGroups();
@@ -413,5 +455,5 @@ $('history-export-btn').addEventListener('click', function () {
     window.open('/api/dashboard/alerts/export?' + historyParams().toString(), '_blank');
 });
 
-refresh(); updateClock(); setInterval(refresh, 2000); setInterval(updateClock, 1000);
+refresh(); updateClock(); refreshTimer = setInterval(refresh, 2000); setInterval(updateClock, 1000);
 

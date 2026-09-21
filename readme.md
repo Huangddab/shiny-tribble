@@ -15,7 +15,13 @@ if err != nil {
 
 ## 登录接口
 
-使用 `user init` 初始化默认管理员后：
+启动 HTTP 服务前，先在项目根目录初始化默认管理员。该命令会创建管理员；如果管理员已存在，会将密码重置为 `admin`：
+
+```powershell
+go run . user init
+```
+
+然后启动服务并打开 `http://localhost:8080/map`，使用 `admin / admin` 登录：
 
 ```http
 POST /api/auth/login
