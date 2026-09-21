@@ -60,7 +60,6 @@ func initCommands() {
 
 	// Initialize httpd commands last
 	initHttpdCommand()
-	initSimulatorCommand()
 }
 
 // initViper initializes configuration

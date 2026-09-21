@@ -20,17 +20,25 @@ import (
 )
 
 type Store struct {
-	mu               sync.RWMutex
-	devices          map[string]*deviceState
-	alerts           map[string]*model.DashboardAlert
-	alertStarted     map[string]int64
-	alertHistory     []model.DashboardAlert
-	commands         map[string]*model.DashboardCommand
-	commandDeadlines map[string]time.Time
-	commandTargets   map[string]map[string]struct{}
-	trainings        map[string]*model.DashboardTraining
-	samples          []model.DashboardTelemetrySample
-	lastSampleAt     map[string]int64
+	mu                sync.RWMutex
+	devices           map[string]*deviceState
+	alerts            map[string]*model.DashboardAlert
+	alertStarted      map[string]int64
+	alertHistory      []model.DashboardAlert
+	commands          map[string]*model.DashboardCommand
+	commandDeadlines  map[string]time.Time
+	commandTargets    map[string]map[string]struct{}
+	trainings         map[string]*model.DashboardTraining
+	samples           []model.DashboardTelemetrySample
+	lastSampleAt      map[string]int64
+	lastPositionShare map[string]int64
+}
+
+const positionShareInterval = 5 * time.Second
+
+type positionShare struct {
+	target string
+	data   []byte
 }
 
 type deviceState struct {
@@ -88,7 +96,11 @@ type eventEnvelope struct {
 }
 
 func NewStore() *Store {
-	return &Store{devices: make(map[string]*deviceState), alerts: make(map[string]*model.DashboardAlert), alertStarted: make(map[string]int64), commands: make(map[string]*model.DashboardCommand), commandDeadlines: make(map[string]time.Time), commandTargets: make(map[string]map[string]struct{}), trainings: make(map[string]*model.DashboardTraining), lastSampleAt: make(map[string]int64)}
+	return &Store{devices: make(map[string]*deviceState), alerts: make(map[string]*model.DashboardAlert), alertStarted: make(map[string]int64), commands: make(map[string]*model.DashboardCommand), commandDeadlines: make(map[string]time.Time), commandTargets: make(map[string]map[string]struct{}), trainings: make(map[string]*model.DashboardTraining), lastSampleAt: make(map[string]int64), lastPositionShare: make(map[string]int64)}
+}
+
+func alertKey(deviceID, kind string) string {
+	return deviceID + "\x00" + kind
 }
 
 func (store *Store) UpdateDeviceName(deviceID, name string) error {
@@ -224,7 +236,7 @@ func (store *Store) StartTrainingWithSource(group, name string, source *model.Da
 	if len(devices) == 0 {
 		return model.DashboardTraining{}, fmt.Errorf("group %s has no devices", group)
 	}
-	if _, err := store.SendGroupNotify(group, 4, map[string]any{"mode": "training"}); err != nil {
+	if _, err := store.SendGroupNotify(group, 3, map[string]any{"mode": "training"}); err != nil {
 		return model.DashboardTraining{}, err
 	}
 	id, err := uuid.NewV7()
@@ -249,7 +261,7 @@ func (store *Store) EndTraining(trainingID string) (model.DashboardTraining, err
 	}
 	group := training.Group
 	store.mu.Unlock()
-	if _, err := store.SendGroupNotify(group, 4, map[string]any{"mode": "monitor"}); err != nil {
+	if _, err := store.SendGroupNotify(group, 3, map[string]any{"mode": "monitor"}); err != nil {
 		return model.DashboardTraining{}, err
 	}
 	store.mu.Lock()
@@ -291,7 +303,7 @@ func (store *Store) sendNotify(targets []string, notifyType int, message any, br
 	}
 	payload := map[string]any{"type": notifyType, "timestamp": time.Now().Unix(), "message": message}
 	commandID := ""
-	if notifyType != 3 {
+	if notifyType == 1 || notifyType == 3 {
 		id, err := uuid.NewV7()
 		if err != nil {
 			return "", fmt.Errorf("generate command id: %w", err)
@@ -304,7 +316,7 @@ func (store *Store) sendNotify(targets []string, notifyType int, message any, br
 		return "", fmt.Errorf("encode notify: %w", err)
 	}
 	qos := byte(1)
-	if notifyType == 3 {
+	if notifyType == 2 {
 		qos = 0
 	}
 	if commandID != "" {
@@ -366,8 +378,9 @@ func (store *Store) CommandHistory(result, target string, limit int) ([]model.Da
 func validateNotifyMessage(notifyType int, message any) error {
 	switch notifyType {
 	case 0:
-		if _, ok := message.(string); !ok {
-			return fmt.Errorf("type 0 message must be a string")
+		value, ok := message.(float64)
+		if !ok || value != math.Trunc(value) || value < 1 || value > 3 {
+			return fmt.Errorf("type 0 message must be 1, 2, or 3")
 		}
 	case 1:
 		values, ok := message.(map[string]any)
@@ -383,19 +396,15 @@ func validateNotifyMessage(notifyType int, message any) error {
 			return fmt.Errorf("type 1 goto requires numeric lat and lng")
 		}
 	case 2:
-		if _, ok := message.(map[string]any); !ok {
-			return fmt.Errorf("type 2 message must be an object")
-		}
-	case 3:
 		values, ok := message.(map[string]any)
 		if !ok {
-			return fmt.Errorf("type 3 message must be an object")
+			return fmt.Errorf("type 2 message must be an object")
 		}
 		devices, ok := values["devices"].([]any)
 		if !ok {
 			positions, positionsOK := values["devices"].([]map[string]any)
 			if !positionsOK {
-				return fmt.Errorf("type 3 devices must contain between 1 and 16 positions")
+				return fmt.Errorf("type 2 devices must contain between 1 and 16 positions")
 			}
 			devices = make([]any, len(positions))
 			for index := range positions {
@@ -403,31 +412,31 @@ func validateNotifyMessage(notifyType int, message any) error {
 			}
 		}
 		if len(devices) == 0 || len(devices) > 16 {
-			return fmt.Errorf("type 3 devices must contain between 1 and 16 positions")
+			return fmt.Errorf("type 2 devices must contain between 1 and 16 positions")
 		}
 		for _, value := range devices {
 			position, ok := value.(map[string]any)
 			if !ok {
-				return fmt.Errorf("type 3 position must be an object")
+				return fmt.Errorf("type 2 position must be an object")
 			}
 			if _, ok := position["device_id"].(string); !ok {
-				return fmt.Errorf("type 3 position requires device_id")
+				return fmt.Errorf("type 2 position requires device_id")
 			}
 			if _, ok := position["lat"].(float64); !ok {
-				return fmt.Errorf("type 3 position requires lat")
+				return fmt.Errorf("type 2 position requires lat")
 			}
 			if _, ok := position["lng"].(float64); !ok {
-				return fmt.Errorf("type 3 position requires lng")
+				return fmt.Errorf("type 2 position requires lng")
 			}
 		}
-	case 4:
+	case 3:
 		values, ok := message.(map[string]any)
 		if !ok {
-			return fmt.Errorf("type 4 message must be an object")
+			return fmt.Errorf("type 3 message must be an object")
 		}
 		mode, ok := values["mode"].(string)
 		if !ok || (mode != "monitor" && mode != "training") {
-			return fmt.Errorf("type 4 mode must be monitor or training")
+			return fmt.Errorf("type 3 mode must be monitor or training")
 		}
 	}
 	return nil
@@ -494,7 +503,7 @@ func (store *Store) ShareGroupPositions(group string) error {
 	}
 	message := map[string]any{"devices": devices}
 	for _, deviceID := range targetIDs {
-		if _, err := store.sendNotify([]string{deviceID}, 3, message, false); err != nil {
+		if _, err := store.sendNotify([]string{deviceID}, 2, message, false); err != nil {
 			return err
 		}
 	}
@@ -505,11 +514,11 @@ func notifyAction(notifyType int, message any) string {
 	switch notifyType {
 	case 0:
 		return "文本通知"
-	case 2:
+	case 1:
 		return "参数配置"
-	case 3:
+	case 2:
 		return "位置共享"
-	case 4:
+	case 3:
 		return "切换模式"
 	}
 	if values, ok := message.(map[string]any); ok {
@@ -656,6 +665,9 @@ func (store *Store) applyTelemetry(deviceID string, envelope telemetryEnvelope) 
 	device.device.Substance = strings.Join(envelope.Message.Sensor.Alarm.Names, ", ")
 	device.device.Battery, device.device.RSSI = envelope.Message.Sensor.Battery.Pct, envelope.Message.RSSI
 	device.device.Fall, device.lastSeen = envelope.Message.GSensor.FallDetected, now
+	if device.device.Status == "normal" && store.hasActiveAlertsLocked(deviceID) {
+		device.device.Status = "alert"
+	}
 	var sample *model.DashboardTelemetrySample
 	if now.Unix()-store.lastSampleAt[deviceID] >= 10 {
 		value := model.DashboardTelemetrySample{DeviceID: deviceID, Timestamp: now.Unix(), Mode: device.device.Mode, Training: device.device.Mode == "training", Lat: device.device.Lat, Lng: device.device.Lng, Conc: device.device.Conc, Threshold: device.device.Threshold, Battery: device.device.Battery, RSSI: device.device.RSSI}
@@ -710,18 +722,31 @@ func (store *Store) applyEvent(deviceID string, event eventEnvelope, when int64)
 		return
 	}
 	if event.Type == 0 {
-		alert := store.alerts[deviceID]
+		kind := ""
+		if len(event.Message.Names) > 0 {
+			kind = "substance"
+		} else if event.Message.FallDetected {
+			kind = "fall"
+		}
+		if kind == "" {
+			return
+		}
+		key := alertKey(deviceID, kind)
+		alert := store.alerts[key]
 		if alert == nil {
 			alert = &model.DashboardAlert{ID: fmt.Sprintf("%s-%d", deviceID, when), Device: deviceID, Group: "未分组", StartedAt: time.Unix(when, 0).Format("15:04:05"), Status: "active", Ack: "pending"}
-			store.alerts[deviceID] = alert
-			store.alertStarted[deviceID] = when
+			if kind == "fall" {
+				alert.ID = fmt.Sprintf("%s-fall-%d", deviceID, when)
+				alert.Fall = true
+			}
+			store.alerts[key] = alert
+			store.alertStarted[key] = when
 		}
-		alert.Current = event.Message.Conc
-		alert.Fall = alert.Fall || event.Message.FallDetected
-		if event.Message.Conc > alert.Max {
-			alert.Max = event.Message.Conc
-		}
-		if len(event.Message.Names) > 0 {
+		if kind == "substance" {
+			alert.Current = event.Message.Conc
+			if event.Message.Conc > alert.Max {
+				alert.Max = event.Message.Conc
+			}
 			alert.Substance = strings.Join(event.Message.Names, ", ")
 		}
 		if device := store.devices[deviceID]; device != nil {
@@ -729,7 +754,11 @@ func (store *Store) applyEvent(deviceID string, event eventEnvelope, when int64)
 			alert.Device, alert.Group = device.device.Name, device.device.Group
 		}
 	} else if event.Type == 1 {
-		store.finishAlertLocked(deviceID, "normal", when, event.Message.Duration, event.Message.MaxConc)
+		if len(event.Message.Names) > 0 || event.Message.MaxConc > 0 {
+			store.finishAlertLocked(alertKey(deviceID, "substance"), "normal", when, event.Message.Duration, event.Message.MaxConc)
+		} else {
+			store.finishAlertLocked(alertKey(deviceID, "fall"), "normal", when, event.Message.Duration, 0)
+		}
 	}
 }
 
@@ -744,7 +773,51 @@ func (store *Store) RunMaintenance(ctx context.Context, interval time.Duration) 
 		case now := <-ticker.C:
 			store.mu.Lock()
 			store.expireLocked(now)
+			shares := store.collectPositionSharesLocked(now)
 			store.mu.Unlock()
+			store.publishPositionShares(shares)
+		}
+	}
+}
+
+func (store *Store) collectPositionSharesLocked(now time.Time) []positionShare {
+	byGroup := make(map[string][]model.DashboardDevice)
+	for _, state := range store.devices {
+		if state.device.Group == "" || state.device.Group == "未分组" || now.Sub(state.lastSeen) >= 15*time.Second {
+			continue
+		}
+		byGroup[state.device.Group] = append(byGroup[state.device.Group], state.device)
+	}
+	shares := make([]positionShare, 0)
+	for group, devices := range byGroup {
+		if len(devices) < 2 || now.Unix()-store.lastPositionShare[group] < int64(positionShareInterval/time.Second) {
+			continue
+		}
+		store.lastPositionShare[group] = now.Unix()
+		for _, target := range devices {
+			positions := make([]map[string]any, 0, len(devices)-1)
+			for _, device := range devices {
+				if device.ID == target.ID {
+					continue
+				}
+				positions = append(positions, map[string]any{"device_id": device.ID, "lat": device.Lat, "lng": device.Lng})
+			}
+			if len(positions) > 16 {
+				positions = positions[:16]
+			}
+			data, err := json.Marshal(map[string]any{"type": 2, "timestamp": now.Unix(), "message": map[string]any{"devices": positions}})
+			if err == nil {
+				shares = append(shares, positionShare{target: target.ID, data: data})
+			}
+		}
+	}
+	return shares
+}
+
+func (store *Store) publishPositionShares(shares []positionShare) {
+	for _, share := range shares {
+		if err := mqtt.Publish("/chem/"+share.target+"/notify", 0, false, share.data); err != nil {
+			logrus.Warnf("publish position share for %s failed: %v", share.target, err)
 		}
 	}
 }
@@ -773,7 +846,8 @@ func (store *Store) expireLocked(now time.Time) {
 		}
 		state.device.LastSeen = formatLastSeen(now.Sub(state.lastSeen))
 		if state.device.Status == "offline" {
-			store.finishAlertLocked(deviceID, "offline", state.lastSeen.Unix(), 0, 0)
+			store.finishAlertLocked(alertKey(deviceID, "substance"), "offline", state.lastSeen.Unix(), 0, 0)
+			store.finishAlertLocked(alertKey(deviceID, "fall"), "offline", state.lastSeen.Unix(), 0, 0)
 		}
 	}
 }
@@ -863,6 +937,18 @@ func (store *Store) finishAlertLocked(deviceID, reason string, endedAt int64, du
 	go deletePersistedAlert(resolved.ID)
 	delete(store.alerts, deviceID)
 	delete(store.alertStarted, deviceID)
+	if strings.Contains(deviceID, "\x00") {
+		deviceID = strings.SplitN(deviceID, "\x00", 2)[0]
+		if !store.hasActiveAlertsLocked(deviceID) {
+			if device := store.devices[deviceID]; device != nil && device.device.Status == "alert" {
+				device.device.Status = "normal"
+			}
+		}
+	}
+}
+
+func (store *Store) hasActiveAlertsLocked(deviceID string) bool {
+	return store.alerts[alertKey(deviceID, "substance")] != nil || store.alerts[alertKey(deviceID, "fall")] != nil
 }
 
 func topicDeviceID(topic string) string {

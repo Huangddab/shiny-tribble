@@ -59,8 +59,7 @@
                                 <label>指令类型<select id="single-type">
                                         <option value="0">文本通知</option>
                                         <option value="1">动作指令</option>
-                                        <option value="2">参数配置</option>
-                                        <option value="4">模式切换</option>
+                                        <option value="3">模式切换</option>
                                     </select></label>
                             </div>
                             <div class="dynamic-fields" id="single-fields"></div>
@@ -76,8 +75,7 @@
                                 <label>指令类型<select id="group-type">
                                         <option value="0">文本通知</option>
                                         <option value="1">动作指令</option>
-                                        <option value="2">参数配置</option>
-                                        <option value="4">模式切换</option>
+                                        <option value="3">模式切换</option>
                                     </select></label>
                             </div>
                             <div class="dynamic-fields" id="group-fields"></div>
@@ -86,16 +84,7 @@
                     </article>
 
                     <article class="panel form-panel">
-                        <div class="panel-heading"><div><span class="section-kicker">POSITION SHARE / 03</span><h2>编队位置共享</h2></div></div>
-                        <form class="command-form" id="position-share-form">
-                            <div class="form-row"><label>目标编队<select id="position-group" required></select></label></div>
-                            <div class="form-actions"><button type="submit" class="btn btn-primary">下发位置共享</button><span class="feedback" id="position-feedback"></span></div>
-                            <p class="form-hint">单次最多下发 16 台设备最新位置，无需 ACK。</p>
-                        </form>
-                    </article>
-
-                    <article class="panel form-panel">
-                        <div class="panel-heading"><div><span class="section-kicker">TRAINING CONTROL / 04</span><h2>训练管理</h2></div></div>
+                        <div class="panel-heading"><div><span class="section-kicker">TRAINING CONTROL / 03</span><h2>训练管理</h2></div></div>
                         <form class="command-form" id="training-start-form">
                             <div class="form-row">
                                 <label>参训编队<select id="training-group" required></select></label>

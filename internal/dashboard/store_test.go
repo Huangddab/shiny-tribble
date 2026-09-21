@@ -1,8 +1,11 @@
 package dashboard
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
+
+	"data-server/internal/model"
 )
 
 func TestAlertNormalEndUsesDeviceFinalValues(t *testing.T) {
@@ -48,7 +51,7 @@ func TestAlertNormalEndUsesDeviceFinalValues(t *testing.T) {
 	}
 }
 
-func TestSubstanceAndFallShareOneAlert(t *testing.T) {
+func TestSubstanceAndFallAreIndependentAlerts(t *testing.T) {
 	store := NewStore()
 	store.applyEvent("device-2", eventEnvelope{Type: 0, Timestamp: 200, Message: struct {
 		Names        []string `json:"names"`
@@ -72,8 +75,27 @@ func TestSubstanceAndFallShareOneAlert(t *testing.T) {
 	}{FallDetected: true}}, 202)
 
 	snapshot := store.Snapshot()
-	if len(snapshot.Alerts) != 1 || !snapshot.Alerts[0].Fall || snapshot.Alerts[0].Substance != "DMMP" {
-		t.Fatalf("expected one merged alert: %+v", snapshot.Alerts)
+	if len(snapshot.Alerts) != 2 {
+		t.Fatalf("expected two independent alerts: %+v", snapshot.Alerts)
+	}
+	for _, alert := range snapshot.Alerts {
+		if alert.Fall != (alert.Substance == "") {
+			t.Fatalf("expected distinct substance and fall alerts: %+v", snapshot.Alerts)
+		}
+	}
+	store.applyEvent("device-2", eventEnvelope{Type: 1, Timestamp: 210, Message: struct {
+		Names        []string `json:"names"`
+		Conc         float64  `json:"conc"`
+		FallDetected bool     `json:"fall_detected"`
+		ID           string   `json:"id"`
+		Result       string   `json:"result"`
+		Reason       string   `json:"reason"`
+		Duration     int      `json:"duration"`
+		MaxConc      float64  `json:"max_conc"`
+	}{Names: []string{"DMMP"}, Duration: 10, MaxConc: 4.2}}, 210)
+	snapshot = store.Snapshot()
+	if len(snapshot.Alerts) != 1 || !snapshot.Alerts[0].Fall || len(snapshot.AlertHistory) != 1 {
+		t.Fatalf("expected only fall alert to remain active: active=%+v history=%+v", snapshot.Alerts, snapshot.AlertHistory)
 	}
 }
 
@@ -105,7 +127,16 @@ func TestOfflineEndsAlertAtLastTelemetry(t *testing.T) {
 			FallDetected bool `json:"fall_detected"`
 		} `json:"gsensor"`
 	}{DeviceID: "device-3", Timestamp: time.Now().Unix() - 16}})
-	store.applyEvent("device-3", eventEnvelope{Type: 0, Timestamp: time.Now().Unix() - 20}, time.Now().Unix()-20)
+	store.applyEvent("device-3", eventEnvelope{Type: 0, Timestamp: time.Now().Unix() - 20, Message: struct {
+		Names        []string `json:"names"`
+		Conc         float64  `json:"conc"`
+		FallDetected bool     `json:"fall_detected"`
+		ID           string   `json:"id"`
+		Result       string   `json:"result"`
+		Reason       string   `json:"reason"`
+		Duration     int      `json:"duration"`
+		MaxConc      float64  `json:"max_conc"`
+	}{Names: []string{"DMMP"}, Conc: 3.8}}, time.Now().Unix()-20)
 
 	snapshot := store.Snapshot()
 	if len(snapshot.Alerts) != 0 || len(snapshot.AlertHistory) != 1 || snapshot.AlertHistory[0].EndReason != "offline" {
@@ -120,13 +151,16 @@ func TestValidateNotifyMessage(t *testing.T) {
 		message    any
 		wantErr    bool
 	}{
-		{name: "text notification", notifyType: 0, message: "集合", wantErr: false},
-		{name: "text notification object", notifyType: 0, message: map[string]any{}, wantErr: true},
+		{name: "alarm notification", notifyType: 0, message: float64(1), wantErr: false},
+		{name: "normal notification", notifyType: 0, message: float64(2), wantErr: false},
+		{name: "evacuate notification", notifyType: 0, message: float64(3), wantErr: false},
+		{name: "invalid notification code", notifyType: 0, message: float64(4), wantErr: true},
+		{name: "notification must be numeric", notifyType: 0, message: "集合", wantErr: true},
 		{name: "valid action", notifyType: 1, message: map[string]any{"action": "evacuate"}, wantErr: false},
 		{name: "invalid action", notifyType: 1, message: map[string]any{"action": "stop"}, wantErr: true},
-		{name: "valid mode", notifyType: 4, message: map[string]any{"mode": "training"}, wantErr: false},
-		{name: "invalid mode", notifyType: 4, message: map[string]any{"mode": "exercise"}, wantErr: true},
-		{name: "valid position list", notifyType: 3, message: map[string]any{"devices": []map[string]any{{"device_id": "d1", "lat": 1.0, "lng": 2.0}}}, wantErr: false},
+		{name: "valid mode", notifyType: 3, message: map[string]any{"mode": "training"}, wantErr: false},
+		{name: "invalid mode", notifyType: 3, message: map[string]any{"mode": "exercise"}, wantErr: true},
+		{name: "valid position list", notifyType: 2, message: map[string]any{"devices": []map[string]any{{"device_id": "d1", "lat": 1.0, "lng": 2.0}}}, wantErr: false},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -134,5 +168,36 @@ func TestValidateNotifyMessage(t *testing.T) {
 				t.Fatalf("validateNotifyMessage() error = %v, wantErr %v", err, test.wantErr)
 			}
 		})
+	}
+}
+
+func TestCollectPositionSharesUsesOnlinePeersOnly(t *testing.T) {
+	store := NewStore()
+	now := time.Unix(100, 0)
+	store.devices["A"] = &deviceState{device: model.DashboardDevice{ID: "A", Group: "编队01", Lat: 22.1, Lng: 114.1}, lastSeen: now}
+	store.devices["B"] = &deviceState{device: model.DashboardDevice{ID: "B", Group: "编队01", Lat: 22.2, Lng: 114.2}, lastSeen: now}
+	store.devices["C"] = &deviceState{device: model.DashboardDevice{ID: "C", Group: "编队02", Lat: 22.3, Lng: 114.3}, lastSeen: now}
+
+	store.mu.Lock()
+	shares := store.collectPositionSharesLocked(now.Add(5 * time.Second))
+	store.mu.Unlock()
+	if len(shares) != 2 {
+		t.Fatalf("expected two same-group shares, got %d", len(shares))
+	}
+	for _, share := range shares {
+		var payload struct {
+			Type    int `json:"type"`
+			Message struct {
+				Devices []struct {
+					ID string `json:"device_id"`
+				} `json:"devices"`
+			} `json:"message"`
+		}
+		if err := json.Unmarshal(share.data, &payload); err != nil {
+			t.Fatalf("decode position share: %v", err)
+		}
+		if payload.Type != 2 || len(payload.Message.Devices) != 1 || payload.Message.Devices[0].ID == share.target || payload.Message.Devices[0].ID == "C" {
+			t.Fatalf("invalid share for %s: %+v", share.target, payload)
+		}
 	}
 }

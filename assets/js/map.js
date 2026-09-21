@@ -1,5 +1,6 @@
 var map = L.map('map-container', { minZoom: 14, maxZoom: 18, zoomControl: false }).setView([22.6335, 113.9035], 17);
 var markers = L.layerGroup().addTo(map);
+var markerViewKey = '';
 
 L.tileLayer('http://localhost:8081/data/baoan/{z}/{x}/{y}.png', { minZoom: 14, maxZoom: 18, maxNativeZoom: 18, attribution: '' }).addTo(map);
 
@@ -94,10 +95,20 @@ function renderActiveTrainings(trainings) {
 
 function renderMarkers(devices) {
     markers.clearLayers();
-    devices.forEach(function (device) {
-        var icon = L.divIcon({ className: '', html: '<div class="device-marker ' + device.status + '"></div>', iconSize: [14, 14], iconAnchor: [7, 7] });
-        L.marker([device.lat, device.lng], { icon: icon }).bindPopup('<strong>' + device.name + '</strong><br>' + device.group + '<br>状态：' + device.status + '<br>浓度：' + device.conc.toFixed(1) + ' ppm').addTo(markers);
+    var visibleDevices = devices.filter(function (device) {
+        return device.status !== 'offline' && Number.isFinite(Number(device.lat)) && Number.isFinite(Number(device.lng)) &&
+            Number(device.lat) >= -90 && Number(device.lat) <= 90 && Number(device.lng) >= -180 && Number(device.lng) <= 180;
     });
+    visibleDevices.forEach(function (device) {
+        var icon = L.divIcon({ className: '', html: '<div class="device-marker ' + device.status + '"></div>', iconSize: [14, 14], iconAnchor: [7, 7] });
+        L.marker([Number(device.lat), Number(device.lng)], { icon: icon }).bindPopup('<strong>' + device.name + '</strong><br>' + device.group + '<br>状态：' + device.status + '<br>浓度：' + device.conc.toFixed(1) + ' ppm').addTo(markers);
+    });
+    var viewKey = visibleDevices.map(function (device) { return device.id + ':' + device.lat + ',' + device.lng; }).sort().join('|');
+    if (viewKey && viewKey !== markerViewKey) {
+        var bounds = L.latLngBounds(visibleDevices.map(function (device) { return [Number(device.lat), Number(device.lng)]; }));
+        map.fitBounds(bounds, { padding: [24, 24], maxZoom: 17 });
+    }
+    markerViewKey = viewKey;
 }
 
 function renderDeviceSelect(devices) {
@@ -186,7 +197,7 @@ document.querySelectorAll('.nav-btn').forEach(function (btn) {
 function fieldsMarkup(type) {
     switch (String(type)) {
         case '0':
-            return '<label>文本内容<textarea class="msg-text" placeholder="请输入下发文本" required></textarea></label>';
+            return '<label>通知内容<select class="msg-notify-code"><option value="1">警报</option><option value="2">正常</option><option value="3">撤离</option></select></label>';
         case '1':
             return '<label>动作<select class="msg-action">' +
                 '<option value="evacuate">立即撤离</option>' +
@@ -200,8 +211,8 @@ function fieldsMarkup(type) {
                 '<label>经度<input class="msg-lng" type="number" step="any"></label>' +
                 '</div>';
         case '2':
-            return '<label>参数 JSON<textarea class="msg-json" placeholder=\'{"key":"value"}\'>{}</textarea></label>';
-        case '4':
+            return '';
+        case '3':
             return '<label>目标模式<select class="msg-mode"><option value="training">训练 training</option><option value="monitor">监测 monitor</option></select></label>';
         default:
             return '';
@@ -223,9 +234,7 @@ function readMessage(containerId, type) {
     var container = $(containerId);
     switch (String(type)) {
         case '0': {
-            var text = container.querySelector('.msg-text').value.trim();
-            if (!text) { throw new Error('请输入文本内容'); }
-            return text;
+            return Number(container.querySelector('.msg-notify-code').value);
         }
         case '1': {
             var action = container.querySelector('.msg-action').value;
@@ -237,11 +246,9 @@ function readMessage(containerId, type) {
             }
             return { action: action };
         }
-        case '2': {
-            var raw = container.querySelector('.msg-json').value.trim() || '{}';
-            try { return JSON.parse(raw); } catch (err) { throw new Error('参数 JSON 格式有误'); }
-        }
-        case '4':
+        case '2':
+            return {};
+        case '3':
             return { mode: container.querySelector('.msg-mode').value };
         default:
             return {};
@@ -285,21 +292,6 @@ $('group-command-form').addEventListener('submit', function (e) {
     apiRequest('POST', '/api/dashboard/groups/' + encodeURIComponent(group) + '/commands', { type: type, message: message }).then(function (res) {
         feedback.textContent = '已下发，command_id: ' + (res && res.id ? res.id : '-'); feedback.className = 'feedback success';
         toast('编队指令已下发'); refresh();
-    }).catch(function (err) {
-        feedback.textContent = err.message; feedback.className = 'feedback error';
-        toast(err.message, true);
-    });
-});
-
-$('position-share-form').addEventListener('submit', function (e) {
-    e.preventDefault();
-    var group = $('position-group').value;
-    var feedback = $('position-feedback');
-    if (!group) { feedback.textContent = '暂无可用编队'; feedback.className = 'feedback error'; return; }
-    feedback.textContent = '下发中…'; feedback.className = 'feedback';
-    apiRequest('POST', '/api/dashboard/groups/' + encodeURIComponent(group) + '/positions/share', {}).then(function () {
-        feedback.textContent = '位置共享已下发'; feedback.className = 'feedback success';
-        toast('位置共享已下发');
     }).catch(function (err) {
         feedback.textContent = err.message; feedback.className = 'feedback error';
         toast(err.message, true);
