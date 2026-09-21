@@ -51,7 +51,7 @@ func TestAlertNormalEndUsesDeviceFinalValues(t *testing.T) {
 	}
 }
 
-func TestSubstanceAndFallAreIndependentAlerts(t *testing.T) {
+func TestSubstanceAndFallShareOneAlert(t *testing.T) {
 	store := NewStore()
 	store.applyEvent("device-2", eventEnvelope{Type: 0, Timestamp: 200, Message: struct {
 		Names        []string `json:"names"`
@@ -75,13 +75,8 @@ func TestSubstanceAndFallAreIndependentAlerts(t *testing.T) {
 	}{FallDetected: true}}, 202)
 
 	snapshot := store.Snapshot()
-	if len(snapshot.Alerts) != 2 {
-		t.Fatalf("expected two independent alerts: %+v", snapshot.Alerts)
-	}
-	for _, alert := range snapshot.Alerts {
-		if alert.Fall != (alert.Substance == "") {
-			t.Fatalf("expected distinct substance and fall alerts: %+v", snapshot.Alerts)
-		}
+	if len(snapshot.Alerts) != 1 || !snapshot.Alerts[0].Fall || snapshot.Alerts[0].Substance != "DMMP" {
+		t.Fatalf("expected one combined alert: %+v", snapshot.Alerts)
 	}
 	store.applyEvent("device-2", eventEnvelope{Type: 1, Timestamp: 210, Message: struct {
 		Names        []string `json:"names"`
@@ -94,19 +89,18 @@ func TestSubstanceAndFallAreIndependentAlerts(t *testing.T) {
 		MaxConc      float64  `json:"max_conc"`
 	}{Names: []string{"DMMP"}, Duration: 10, MaxConc: 4.2}}, 210)
 	snapshot = store.Snapshot()
-	if len(snapshot.Alerts) != 1 || !snapshot.Alerts[0].Fall || len(snapshot.AlertHistory) != 1 {
-		t.Fatalf("expected only fall alert to remain active: active=%+v history=%+v", snapshot.Alerts, snapshot.AlertHistory)
+	if len(snapshot.Alerts) != 0 || len(snapshot.AlertHistory) != 1 || !snapshot.AlertHistory[0].Fall {
+		t.Fatalf("expected one resolved combined alert: active=%+v history=%+v", snapshot.Alerts, snapshot.AlertHistory)
 	}
 }
 
 func TestOfflineEndsAlertAtLastTelemetry(t *testing.T) {
 	store := NewStore()
-	store.applyTelemetry("device-3", telemetryEnvelope{Message: struct {
-		DeviceID  string `json:"device_id"`
-		Timestamp int64  `json:"timestamp"`
-		Mode      string `json:"mode"`
-		RSSI      int    `json:"rssi"`
-		GNSS      struct {
+	store.applyTelemetry("device-3", telemetryEnvelope{Timestamp: time.Now().Unix() - 16, Message: struct {
+		DeviceID string `json:"device_id"`
+		Mode     string `json:"mode"`
+		RSSI     int    `json:"rssi"`
+		GNSS     struct {
 			Fixed bool    `json:"fixed"`
 			Lat   float64 `json:"lat"`
 			Lng   float64 `json:"lng"`
@@ -126,7 +120,7 @@ func TestOfflineEndsAlertAtLastTelemetry(t *testing.T) {
 		GSensor struct {
 			FallDetected bool `json:"fall_detected"`
 		} `json:"gsensor"`
-	}{DeviceID: "device-3", Timestamp: time.Now().Unix() - 16}})
+	}{DeviceID: "device-3"}})
 	store.applyEvent("device-3", eventEnvelope{Type: 0, Timestamp: time.Now().Unix() - 20, Message: struct {
 		Names        []string `json:"names"`
 		Conc         float64  `json:"conc"`
@@ -161,6 +155,7 @@ func TestValidateNotifyMessage(t *testing.T) {
 		{name: "valid mode", notifyType: 3, message: map[string]any{"mode": "training"}, wantErr: false},
 		{name: "invalid mode", notifyType: 3, message: map[string]any{"mode": "exercise"}, wantErr: true},
 		{name: "valid position list", notifyType: 2, message: map[string]any{"devices": []map[string]any{{"device_id": "d1", "lat": 1.0, "lng": 2.0}}}, wantErr: false},
+		{name: "unsupported type", notifyType: 4, message: float64(1), wantErr: true},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

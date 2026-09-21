@@ -189,7 +189,7 @@ func loadAlertHistory(deviceID, group string, from, to int64, beforeID string, b
 	}
 	filter := bson.M{}
 	if deviceID != "" {
-		filter["device"] = deviceID
+		filter["device_id"] = deviceID
 	}
 	if group != "" {
 		filter["group"] = group
@@ -222,7 +222,7 @@ func loadAlertHistory(deviceID, group string, from, to int64, beforeID string, b
 	}
 	alerts := make([]model.DashboardAlert, 0, len(records))
 	for _, record := range records {
-		alerts = append(alerts, model.DashboardAlert{ID: record.ID, Device: record.Device, Group: record.Group, Substance: record.Substance, Fall: record.Fall, StartedAt: record.StartedAt, StartedAtUnix: record.StartedAtUnix, Duration: record.Duration, Current: record.Current, Max: record.Max, Status: record.Status, Ack: record.Ack, EndReason: record.EndReason, EndedAt: record.EndedAt, EndedAtUnix: record.EndedAtUnix})
+		alerts = append(alerts, model.DashboardAlert{ID: record.ID, DeviceID: record.DeviceID, DeviceName: record.DeviceName, Group: record.Group, Substance: record.Substance, Fall: record.Fall, StartedAt: record.StartedAt, StartedAtUnix: record.StartedAtUnix, Duration: record.Duration, Current: record.Current, Max: record.Max, Status: record.Status, Ack: record.Ack, EndReason: record.EndReason, EndedAt: record.EndedAt, EndedAtUnix: record.EndedAtUnix})
 	}
 	return alerts, nil
 }
@@ -286,7 +286,8 @@ type auditRecord struct {
 
 type alertHistoryRecord struct {
 	ID            string  `bson:"_id"`
-	Device        string  `bson:"device"`
+	DeviceID      string  `bson:"device_id"`
+	DeviceName    string  `bson:"device_name"`
 	Group         string  `bson:"group"`
 	Substance     string  `bson:"substance"`
 	Fall          bool    `bson:"fall"`
@@ -309,5 +310,5 @@ func alertDocument(alert model.DashboardAlert) bson.M {
 }
 
 func alertFields(alert model.DashboardAlert) bson.M {
-	return bson.M{"device": alert.Device, "group": alert.Group, "substance": alert.Substance, "fall": alert.Fall, "started_at": alert.StartedAt, "started_at_unix": alert.StartedAtUnix, "duration": alert.Duration, "current": alert.Current, "max": alert.Max, "status": alert.Status, "ack": alert.Ack, "end_reason": alert.EndReason, "ended_at": alert.EndedAt, "ended_at_unix": alert.EndedAtUnix}
+	return bson.M{"device_id": alert.DeviceID, "device_name": alert.DeviceName, "group": alert.Group, "substance": alert.Substance, "fall": alert.Fall, "started_at": alert.StartedAt, "started_at_unix": alert.StartedAtUnix, "duration": alert.Duration, "current": alert.Current, "max": alert.Max, "status": alert.Status, "ack": alert.Ack, "end_reason": alert.EndReason, "ended_at": alert.EndedAt, "ended_at_unix": alert.EndedAtUnix}
 }

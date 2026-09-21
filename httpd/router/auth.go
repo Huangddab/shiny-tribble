@@ -59,6 +59,7 @@ func Login(store *dashboard.Store) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create session"})
 			return
 		}
+		c.SetCookie("auth-token", token, int(time.Until(expiresAt).Seconds()), "/", "", false, true)
 		store.RecordAudit(user.Username, "auth.login", user.Username, "success", nil)
 		c.JSON(http.StatusOK, gin.H{"token": token, "expires_at": expiresAt.Unix(), "user": gin.H{"username": user.Username, "role": user.Role}})
 	}
@@ -88,11 +89,17 @@ func RequireAuth() gin.HandlerFunc {
 			return
 		}
 		header := c.GetHeader("Authorization")
-		if !strings.HasPrefix(header, "Bearer ") {
+		tokenString := ""
+		if strings.HasPrefix(header, "Bearer ") {
+			tokenString = strings.TrimPrefix(header, "Bearer ")
+		} else if cookie, err := c.Cookie("auth-token"); err == nil {
+			tokenString = cookie
+		}
+		if tokenString == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authorization required"})
 			return
 		}
-		token, err := jwt.ParseWithClaims(strings.TrimPrefix(header, "Bearer "), &authClaims{}, func(token *jwt.Token) (any, error) {
+		token, err := jwt.ParseWithClaims(tokenString, &authClaims{}, func(token *jwt.Token) (any, error) {
 			return []byte(secret), nil
 		})
 		if err != nil || !token.Valid {

@@ -21,25 +21,27 @@ type DashboardSummary struct {
 }
 
 type DashboardDevice struct {
-	ID        string  `json:"id"`
-	Name      string  `json:"name"`
-	Group     string  `json:"group"`
-	Status    string  `json:"status"`
-	Mode      string  `json:"mode"`
-	Lat       float64 `json:"lat"`
-	Lng       float64 `json:"lng"`
-	Conc      float64 `json:"conc"`
-	Threshold float64 `json:"threshold"`
-	Substance string  `json:"substance"`
-	Battery   int     `json:"battery"`
-	RSSI      int     `json:"rssi"`
-	Fall      bool    `json:"fall"`
-	LastSeen  string  `json:"last_seen"`
+	ID            string  `json:"id"`
+	Name          string  `json:"name"`
+	Group         string  `json:"group"`
+	Status        string  `json:"status"`
+	Mode          string  `json:"mode"`
+	Lat           float64 `json:"lat"`
+	Lng           float64 `json:"lng"`
+	PositionValid bool    `json:"position_valid"`
+	Conc          float64 `json:"conc"`
+	Threshold     float64 `json:"threshold"`
+	Substance     string  `json:"substance"`
+	Battery       int     `json:"battery"`
+	RSSI          int     `json:"rssi"`
+	Fall          bool    `json:"fall"`
+	LastSeen      string  `json:"last_seen"`
 }
 
 type DashboardAlert struct {
 	ID            string  `json:"id"`
-	Device        string  `json:"device"`
+	DeviceID      string  `json:"device_id"`
+	DeviceName    string  `json:"device_name"`
 	Group         string  `json:"group"`
 	Substance     string  `json:"substance"`
 	Fall          bool    `json:"fall"`

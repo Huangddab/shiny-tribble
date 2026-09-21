@@ -63,8 +63,8 @@ func DashboardCommand(store *dashboard.Store) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		if request.Type < 0 || request.Type > 4 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "notify type must be between 0 and 4"})
+		if request.Type < 0 || request.Type > 3 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "notify type must be between 0 and 3"})
 			return
 		}
 		var message any
@@ -91,8 +91,8 @@ func DashboardGroupCommand(store *dashboard.Store) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		if request.Type < 0 || request.Type > 4 || request.Type == 3 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "group command type must be 0, 1, 2, or 4"})
+		if request.Type < 0 || request.Type > 3 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "group command type must be between 0 and 3"})
 			return
 		}
 		var message any

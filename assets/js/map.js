@@ -47,7 +47,7 @@ function renderAlerts(alerts) {
     $('alert-list').innerHTML = alerts.length ? alerts.map(function (alert) {
         var subject = alert.substance || (alert.fall ? '跌倒报警' : '设备报警');
         var confirmed = alert.ack === 'confirmed';
-        return '<div class="alert-item"><div class="alert-main"><span class="alert-device">' + alert.device + '</span><span class="alert-badge">● ACTIVE</span></div>' +
+        return '<div class="alert-item"><div class="alert-main"><span class="alert-device">' + (alert.device_name || alert.device_id) + '</span><span class="alert-badge">● ACTIVE</span></div>' +
             '<div class="alert-detail"><span>报警物<b>' + subject + '</b></span><span>当前浓度<b>' + (alert.current ? alert.current.toFixed(1) + ' <small>ppm</small>' : '--') + '</b></span><span>最高浓度<b>' + (alert.max ? alert.max.toFixed(1) + ' <small>ppm</small>' : '--') + '</b></span></div>' +
             '<div class="alert-time">' + alert.group + ' · ' + alert.started_at + ' · 已持续 ' + formatDuration(alert.duration) + (alert.fall ? ' · <span class="fall-flag">跌倒信号</span>' : '') + '</div>' +
             '<div class="alert-actions"><span class="ack-pill' + (confirmed ? ' confirmed' : '') + '">' + (confirmed ? '已确认' : '未确认') + '</span>' +
@@ -96,7 +96,7 @@ function renderActiveTrainings(trainings) {
 function renderMarkers(devices) {
     markers.clearLayers();
     var visibleDevices = devices.filter(function (device) {
-        return device.status !== 'offline' && Number.isFinite(Number(device.lat)) && Number.isFinite(Number(device.lng)) &&
+        return device.position_valid === true && device.status !== 'offline' && Number.isFinite(Number(device.lat)) && Number.isFinite(Number(device.lng)) &&
             Number(device.lat) >= -90 && Number(device.lat) <= 90 && Number(device.lng) >= -180 && Number(device.lng) <= 180;
     });
     visibleDevices.forEach(function (device) {
@@ -144,7 +144,7 @@ function renderDevicesManage(devices) {
 
 function renderGroupSelects(groups) {
     var options = groups.map(function (group) { return '<option value="' + escapeHtml(group.name) + '">' + escapeHtml(group.name) + ' (' + group.total + '台)</option>'; }).join('');
-    ['group-target', 'position-group', 'training-group'].forEach(function (id) {
+    ['group-target', 'training-group'].forEach(function (id) {
         var select = $(id);
         var current = select.value;
         select.innerHTML = options;
@@ -389,7 +389,7 @@ function renderHistory(items) {
     $('history-tbody').innerHTML = items.length ? items.map(function (item) {
         var reasonText = { normal: '正常结束', offline: '设备离线' }[item.end_reason] || item.end_reason || '-';
         var ackText = item.ack === 'confirmed' ? '已确认' : '未确认';
-        return '<tr><td>' + item.device + '</td><td>' + item.group + '</td><td>' + (item.substance || '-') + '</td><td>' + (item.fall ? '是' : '否') + '</td><td>' + item.started_at + '</td><td>' + (item.ended_at || '-') + '</td><td>' + formatDuration(item.duration) + '</td><td>' + (item.max ? item.max.toFixed(1) + ' ppm' : '-') + '</td><td>' + reasonText + '</td><td>' + ackText + '</td></tr>';
+        return '<tr><td>' + (item.device_name || item.device_id) + '</td><td>' + item.group + '</td><td>' + (item.substance || '-') + '</td><td>' + (item.fall ? '是' : '否') + '</td><td>' + item.started_at + '</td><td>' + (item.ended_at || '-') + '</td><td>' + formatDuration(item.duration) + '</td><td>' + (item.max ? item.max.toFixed(1) + ' ppm' : '-') + '</td><td>' + reasonText + '</td><td>' + ackText + '</td></tr>';
     }).join('') : '<tr><td colspan="10" class="empty-state">暂无符合条件的记录</td></tr>';
 }
 
@@ -413,5 +413,5 @@ $('history-export-btn').addEventListener('click', function () {
     window.open('/api/dashboard/alerts/export?' + historyParams().toString(), '_blank');
 });
 
-refresh(); updateClock(); setInterval(refresh, 15000); setInterval(updateClock, 1000);
+refresh(); updateClock(); setInterval(refresh, 2000); setInterval(updateClock, 1000);
 
