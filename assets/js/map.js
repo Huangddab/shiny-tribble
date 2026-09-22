@@ -99,7 +99,7 @@ function renderDevices(devices) {
     $('device-table').innerHTML = devices.map(function (device) {
         var statusText = { normal: '正常', alert: '报警', offline: '离线' }[device.status];
         var modeText = device.mode === 'training' ? '训练' : '监测';
-        return '<tr><td>' + device.name + '</td><td>' + device.group + '</td><td><span class="status-dot status-' + device.status + '"></span>' + statusText + '</td><td class="mode-' + device.mode + '">' + modeText + '</td><td class="' + (device.status === 'alert' ? 'concentration-alert' : '') + '">' + device.conc.toFixed(1) + ' ppm</td><td class="' + (device.battery < 40 ? 'battery-low' : '') + '">' + device.battery + '%</td><td>' + device.rssi + ' dBm</td><td>' + device.last_seen + '</td></tr>';
+        return '<tr><td class="device-code">' + escapeHtml(device.id) + '</td><td>' + escapeHtml(device.name) + '</td><td>' + escapeHtml(device.group || '未分组') + '</td><td><span class="status-dot status-' + device.status + '"></span>' + statusText + '</td><td class="mode-' + device.mode + '">' + modeText + '</td><td>' + escapeHtml(device.substance || '—') + '</td><td class="' + (device.status === 'alert' ? 'concentration-alert' : '') + '">' + device.conc.toFixed(1) + ' / ' + device.threshold.toFixed(1) + ' ppm</td><td class="' + (device.battery < 40 ? 'battery-low' : '') + '">' + device.battery + '%</td><td>' + device.rssi + ' dBm</td><td>' + (device.position_valid ? '已定位' : '未定位') + '</td><td>' + device.last_seen + '</td></tr>';
     }).join('');
 }
 
@@ -139,8 +139,8 @@ function renderMarkers(devices) {
             Number(device.lat) >= -90 && Number(device.lat) <= 90 && Number(device.lng) >= -180 && Number(device.lng) <= 180;
     });
     visibleDevices.forEach(function (device) {
-        var icon = L.divIcon({ className: '', html: '<div class="device-marker ' + device.status + '"></div>', iconSize: [14, 14], iconAnchor: [7, 7] });
-        L.marker([Number(device.lat), Number(device.lng)], { icon: icon }).bindPopup('<strong>' + device.name + '</strong><br>' + device.group + '<br>状态：' + device.status + '<br>浓度：' + device.conc.toFixed(1) + ' ppm').addTo(markers);
+        var icon = L.divIcon({ className: '', html: '<div class="marker-wrap"><div class="device-marker ' + device.status + '"></div><span>' + escapeHtml(device.name || device.id) + '</span></div>', iconSize: [120, 38], iconAnchor: [10, 19] });
+        L.marker([Number(device.lat), Number(device.lng)], { icon: icon }).bindPopup('<strong>' + escapeHtml(device.name) + '</strong><br>编号：' + escapeHtml(device.id) + '<br>编队：' + escapeHtml(device.group || '未分组') + '<br>状态：' + ({normal:'正常',alert:'报警',offline:'离线'}[device.status] || device.status) + '<br>物质：' + escapeHtml(device.substance || '—') + '<br>浓度：' + device.conc.toFixed(1) + ' ppm<br>电量：' + device.battery + '%<br>RSSI：' + device.rssi + ' dBm').addTo(markers);
     });
     var viewKey = visibleDevices.map(function (device) { return device.id + ':' + device.lat + ',' + device.lng; }).sort().join('|');
     if (viewKey && viewKey !== markerViewKey) {
@@ -210,6 +210,8 @@ function renderSnapshot(snapshot) {
     renderDeviceSelect(snapshot.devices || []);
     renderKnownDevices(snapshot.devices || []);
     renderDevicesManage(snapshot.devices || []);
+    if ($('settings-device-count')) { setText('settings-device-count', snapshot.summary.total_devices + ' 台'); }
+    if ($('settings-updated-at')) { setText('settings-updated-at', new Date(snapshot.updated_at).toLocaleString('zh-CN', { hour12: false })); }
     document.querySelector('.connection-pill').innerHTML = '<i></i> 数据链路正常';
 }
 
@@ -233,6 +235,23 @@ document.querySelectorAll('.nav-btn').forEach(function (btn) {
         if (btn.dataset.page === 'history' && !historyLoaded) { loadHistory(); }
     });
 });
+
+var trainingModeEnabled = false;
+if ($('training-toggle')) {
+    $('training-toggle').addEventListener('click', function () {
+        var button = this;
+        var next = !trainingModeEnabled;
+        button.disabled = true;
+        apiRequest('POST', '/api/dashboard/commands', { device_id: 'all', type: 3, message: { mode: next ? 'training' : 'monitor' } }).then(function () {
+            trainingModeEnabled = next;
+            button.classList.toggle('on', next);
+            button.setAttribute('aria-checked', String(next));
+            setText('training-toggle-state', next ? '已开启' : '关闭');
+            toast(next ? '已下发全体演练模式指令' : '已下发恢复监测指令');
+            refresh();
+        }).catch(function (err) { toast(err.message, true); }).finally(function () { button.disabled = false; });
+    });
+}
 
 /* ---------- command center: dynamic notify fields ---------- */
 
@@ -456,4 +475,3 @@ $('history-export-btn').addEventListener('click', function () {
 });
 
 refresh(); updateClock(); refreshTimer = setInterval(refresh, 2000); setInterval(updateClock, 1000);
-

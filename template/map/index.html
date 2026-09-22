@@ -18,10 +18,11 @@
         <header class="topbar">
             <div class="brand-lockup"><span class="brand-mark">化</span><div><p class="eyebrow">CUSTOMS CHEMICAL RECON PLATFORM</p><h1>化学物质智能监测综合态势平台</h1></div></div>
             <nav class="main-nav" aria-label="主导航">
-                <button class="nav-btn active" data-page="dashboard">实时态势</button>
-                <button class="nav-btn" data-page="command">指挥调度</button>
-                <button class="nav-btn" data-page="history">报警历史</button>
-                <button class="nav-btn" data-page="devices">设备管理</button>
+                <button class="nav-btn active" data-page="dashboard"><b>态</b><span>实时态势</span></button>
+                <button class="nav-btn" data-page="devices"><b>设</b><span>设备列表</span></button>
+                <button class="nav-btn" data-page="command"><b>调</b><span>指挥调度</span></button>
+                <button class="nav-btn" data-page="history"><b>警</b><span>报警历史</span></button>
+                <button class="nav-btn" data-page="settings"><b>配</b><span>系统设置</span></button>
             </nav>
             <div class="topbar-meta"><span id="system-time">--:--:--</span><span class="divider"></span><span class="connection-pill"><i></i> 数据链路正常</span></div>
         </header>
@@ -41,7 +42,7 @@
                     <aside class="panel alert-panel"><div class="panel-heading"><div><span class="section-kicker">EVENT STREAM</span><h2>实时报警</h2></div><span class="panel-count" id="alert-count">0</span></div><div id="alert-list" class="alert-list"></div><div class="alert-timeline"><span>EVENTS / LAST 60 MIN</span><i></i><i></i><i class="hot"></i><i></i><i class="hot"></i></div><div class="panel-footer"><span>报警结束以设备 Events type=1 为准</span><span class="arrow">↗</span></div></aside>
                 </section>
 
-                <section class="panel device-panel"><div class="panel-heading"><div><span class="section-kicker">TELEMETRY / DEVICE FLEET</span><h2>设备实时列表</h2></div><span class="subtle-label">AUTO REFRESH · 2秒周期</span></div><div class="table-wrap"><table><thead><tr><th>设备编号</th><th>编组</th><th>状态</th><th>模式</th><th>检测物质</th><th>PID 浓度</th><th>电量</th><th>RSSI</th><th>最近上报</th></tr></thead><tbody id="device-table"></tbody></table></div></section>
+                <section class="panel device-panel"><div class="panel-heading"><div><span class="section-kicker">TELEMETRY / DEVICE FLEET</span><h2>设备实时列表</h2></div><span class="subtle-label">AUTO REFRESH · 2秒周期</span></div><div class="table-wrap"><table><thead><tr><th>设备编号</th><th>设备名称</th><th>编队</th><th>状态</th><th>模式</th><th>检测物质</th><th>PID / 阈值</th><th>电量</th><th>RSSI</th><th>GNSS</th><th>最近上报</th></tr></thead><tbody id="device-table"></tbody></table></div></section>
                 <section class="bottom-grid dashboard-secondary">
                     <article class="panel command-panel"><div class="panel-heading"><div><span class="section-kicker">COMMAND LOOP</span><h2>指令执行</h2></div><span class="subtle-label">Notify ACK</span></div><div id="command-list" class="command-list"></div></article>
                     <article class="panel training-panel"><div class="panel-heading"><div><span class="section-kicker">EXERCISE CONTROL</span><h2>训练任务</h2></div><span class="subtle-label">TRAINING STATUS</span></div><div id="training-list" class="training-list"></div></article>
@@ -49,17 +50,14 @@
             </section>
 
             <section class="page" id="page-command">
+                <div class="subpage-heading"><div><span class="section-kicker">COMMAND CENTER</span><h2>指挥调度</h2><p>按通信协议向全部设备、指定编队或单台设备下发固定通知。</p></div><div class="training-switch"><span>演练模式</span><button type="button" id="training-toggle" role="switch" aria-checked="false"><i></i></button><strong id="training-toggle-state">关闭</strong></div></div>
                 <section class="command-grid">
                     <article class="panel form-panel">
                         <div class="panel-heading"><div><span class="section-kicker">DIRECT COMMAND / 01</span><h2>单设备 / 全体指令</h2></div></div>
                         <form class="command-form" id="single-command-form">
                             <div class="form-row">
                                 <label>下发目标<select id="single-device" required></select></label>
-                                <label>指令类型<select id="single-type">
-                                        <option value="0">文本通知</option>
-                                        <option value="1">动作指令</option>
-                                        <option value="3">模式切换</option>
-                                    </select></label>
+                                <label>指令类型<select id="single-type"><option value="0">固定文本通知</option></select></label>
                             </div>
                             <div class="dynamic-fields" id="single-fields"></div>
                             <div class="form-actions"><button type="submit" class="btn btn-primary">下发指令</button><span class="feedback" id="single-feedback"></span></div>
@@ -71,11 +69,7 @@
                         <form class="command-form" id="group-command-form">
                             <div class="form-row">
                                 <label>目标编队<select id="group-target" required></select></label>
-                                <label>指令类型<select id="group-type">
-                                        <option value="0">文本通知</option>
-                                        <option value="1">动作指令</option>
-                                        <option value="3">模式切换</option>
-                                    </select></label>
+                                <label>指令类型<select id="group-type"><option value="0">固定文本通知</option></select></label>
                             </div>
                             <div class="dynamic-fields" id="group-fields"></div>
                             <div class="form-actions"><button type="submit" class="btn btn-primary">下发编队指令</button><span class="feedback" id="group-feedback"></span></div>
@@ -127,6 +121,15 @@
                     <div class="panel-heading"><div><span class="section-kicker">DEVICE REGISTRY / 01</span><h2>设备管理</h2></div><span class="subtle-label">重命名 / 编队分配</span></div>
                     <div class="table-wrap"><table><thead><tr><th>设备编号</th><th>名称</th><th>编队</th><th>状态</th><th>模式</th><th>电量</th><th>操作</th></tr></thead><tbody id="devices-manage-tbody"></tbody></table></div>
                 </article>
+            </section>
+
+            <section class="page" id="page-settings">
+                <div class="subpage-heading"><div><span class="section-kicker">SYSTEM SERVICES</span><h2>系统设置</h2><p>查看平台核心服务与运行信息。</p></div></div>
+                <section class="settings-grid">
+                    <article class="panel setting-card"><div class="panel-heading"><div><span class="section-kicker">MQTT BROKER</span><h2>MQTT 配置</h2></div><span class="service-state normal">● 连接正常</span></div><div class="setting-body"><div><span>通信协议</span><strong>MQTT 3.1.1</strong></div><div><span>设备主题</span><strong>/chem/telemetry/{device_id}</strong></div><div><span>事件主题</span><strong>/chem/events/{device_id}</strong></div></div></article>
+                    <article class="panel setting-card"><div class="panel-heading"><div><span class="section-kicker">OFFLINE MAP</span><h2>地图服务</h2></div><span class="service-state normal">● 运行正常</span></div><div class="setting-body"><div><span>地图引擎</span><strong>Leaflet</strong></div><div><span>瓦片服务</span><strong>TileServer GL</strong></div><div><span>运行模式</span><strong>OFFLINE</strong></div></div></article>
+                    <article class="panel setting-card"><div class="panel-heading"><div><span class="section-kicker">PLATFORM</span><h2>系统信息</h2></div><span class="service-state normal">● 正常</span></div><div class="setting-body"><div><span>平台版本</span><strong>v1.0.0</strong></div><div><span>设备数量</span><strong id="settings-device-count">--</strong></div><div><span>最后更新</span><strong id="settings-updated-at">--</strong></div></div></article>
+                </section>
             </section>
         </main>
 
