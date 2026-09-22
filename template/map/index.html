@@ -14,17 +14,6 @@
 </head>
 
 <body>
-    <section class="login-gate" id="login-gate" hidden>
-        <form class="login-card" id="login-form">
-            <span class="section-kicker">SECURE ACCESS</span>
-            <h2>登录平台</h2>
-            <p>请输入平台账号后查看设备态势。</p>
-            <label>用户名<input id="login-username" name="username" autocomplete="username" required></label>
-            <label>密码<input id="login-password" name="password" type="password" autocomplete="current-password" required></label>
-            <button type="submit" class="btn btn-primary">登录</button>
-            <span class="feedback error" id="login-feedback"></span>
-        </form>
-    </section>
     <div class="app">
         <header class="topbar">
             <div class="brand-lockup"><span class="brand-mark">化</span><div><p class="eyebrow">CUSTOMS CHEMICAL RECON PLATFORM</p><h1>化学物质智能监测综合态势平台</h1></div></div>
@@ -40,24 +29,23 @@
         <main>
             <section class="page active" id="page-dashboard">
                 <section class="metric-grid" aria-label="平台概览">
-                    <article class="metric-card metric-primary"><div class="metric-label">设备总数 <span>DEVICE FLEET</span></div><strong id="metric-total">--</strong><div class="metric-foot"><span class="metric-accent">●</span> 关区在册设备</div></article>
-                    <article class="metric-card"><div class="metric-label">在线设备 <span>ONLINE</span></div><strong id="metric-online">--</strong><div class="metric-foot positive"><span>▲</span> 运行稳定</div></article>
-                    <article class="metric-card metric-alert"><div class="metric-label">当前报警 <span>ACTIVE ALERTS</span></div><strong id="metric-alerts">--</strong><div class="metric-foot alert-text"><span>●</span> 需立即关注</div></article>
-                    <article class="metric-card"><div class="metric-label">离线设备 <span>OFFLINE</span></div><strong id="metric-offline">--</strong><div class="metric-foot"><span class="metric-muted">●</span> 15秒无遥测判定</div></article>
-                    <article class="metric-card"><div class="metric-label">训练设备 <span>TRAINING MODE</span></div><strong id="metric-training">--</strong><div class="metric-foot training-text"><span>◆</span> 模式切换闭环中</div></article>
+                    <article class="metric-card metric-primary"><div class="metric-label">关区监测概览 <span>REAL-TIME STATUS</span></div><strong id="metric-total">--</strong><div class="metric-foot">设备总数 · 在册设备</div></article>
+                    <article class="metric-card"><div class="metric-label">在线设备 <span>ONLINE</span></div><strong id="metric-online">--</strong><div class="metric-foot positive">运行稳定</div></article>
+                    <article class="metric-card metric-alert"><div class="metric-label">当前报警 <span>ALARM</span></div><strong id="metric-alerts">--</strong><div class="metric-foot alert-text">需立即关注</div></article>
+                    <article class="metric-card"><div class="metric-label">离线设备 <span>OFFLINE</span></div><strong id="metric-offline">--</strong><div class="metric-foot">15秒无遥测判定</div></article>
+                    <article class="metric-card"><div class="metric-label">训练设备 <span>TRAINING</span></div><strong id="metric-training">--</strong><div class="metric-foot training-text">模式切换闭环中</div></article>
                 </section>
 
                 <section class="main-grid">
-                    <article class="panel map-panel"><div class="panel-heading"><div><span class="section-kicker">LIVE MAP / 01</span><h2>关区设备实时分布</h2></div><div class="map-legend"><span><i class="legend-normal"></i>正常</span><span><i class="legend-alert"></i>报警</span><span><i class="legend-offline"></i>离线</span></div></div><div id="map-container"></div><div class="map-caption"><span>离线地图 · 宝安区</span><span id="map-updated">数据更新 --</span></div></article>
-                    <aside class="panel alert-panel"><div class="panel-heading"><div><span class="section-kicker">EVENT STREAM / 02</span><h2>实时报警</h2></div><span class="panel-count" id="alert-count">0</span></div><div id="alert-list" class="alert-list"></div><div class="panel-footer"><span>报警结束以设备 Events type=1 为准</span><span class="arrow">↗</span></div></aside>
+                    <article class="panel map-panel"><div class="panel-heading"><div><span class="section-kicker">LIVE GIS / DEVICE DISTRIBUTION</span><h2>设备态势分布 <small>OFFLINE MAP / LIVE</small></h2></div><div class="map-legend"><span><i class="legend-normal"></i>正常</span><span><i class="legend-alert"></i>报警</span><span><i class="legend-offline"></i>离线</span></div></div><div id="map-container"></div><div class="map-caption"><span>离线地图 · 宝安区</span><span id="map-updated">数据更新 --</span></div></article>
+                    <aside class="panel alert-panel"><div class="panel-heading"><div><span class="section-kicker">EVENT STREAM</span><h2>实时报警</h2></div><span class="panel-count" id="alert-count">0</span></div><div id="alert-list" class="alert-list"></div><div class="alert-timeline"><span>EVENTS / LAST 60 MIN</span><i></i><i></i><i class="hot"></i><i></i><i class="hot"></i></div><div class="panel-footer"><span>报警结束以设备 Events type=1 为准</span><span class="arrow">↗</span></div></aside>
                 </section>
 
-                <section class="bottom-grid">
-                    <article class="panel device-panel"><div class="panel-heading"><div><span class="section-kicker">TELEMETRY / 03</span><h2>设备态势</h2></div><span class="subtle-label">实时遥测 · 2秒周期</span></div><div class="table-wrap"><table><thead><tr><th>设备</th><th>编组</th><th>状态</th><th>模式</th><th>当前浓度</th><th>电量</th><th>信号</th><th>最近上报</th></tr></thead><tbody id="device-table"></tbody></table></div></article>
-                    <article class="panel command-panel"><div class="panel-heading"><div><span class="section-kicker">COMMAND LOOP / 04</span><h2>指令执行</h2></div><span class="subtle-label">Notify ACK</span></div><div id="command-list" class="command-list"></div><div class="panel-footer"><span>超时阈值 10 秒 · 不自动重试</span><span class="arrow">↗</span></div></article>
+                <section class="panel device-panel"><div class="panel-heading"><div><span class="section-kicker">TELEMETRY / DEVICE FLEET</span><h2>设备实时列表</h2></div><span class="subtle-label">AUTO REFRESH · 2秒周期</span></div><div class="table-wrap"><table><thead><tr><th>设备编号</th><th>编组</th><th>状态</th><th>模式</th><th>检测物质</th><th>PID 浓度</th><th>电量</th><th>RSSI</th><th>最近上报</th></tr></thead><tbody id="device-table"></tbody></table></div></section>
+                <section class="bottom-grid dashboard-secondary">
+                    <article class="panel command-panel"><div class="panel-heading"><div><span class="section-kicker">COMMAND LOOP</span><h2>指令执行</h2></div><span class="subtle-label">Notify ACK</span></div><div id="command-list" class="command-list"></div></article>
+                    <article class="panel training-panel"><div class="panel-heading"><div><span class="section-kicker">EXERCISE CONTROL</span><h2>训练任务</h2></div><span class="subtle-label">TRAINING STATUS</span></div><div id="training-list" class="training-list"></div></article>
                 </section>
-
-                <section class="panel training-panel"><div class="panel-heading"><div><span class="section-kicker">EXERCISE CONTROL / 05</span><h2>训练任务</h2></div><span class="subtle-label">前往「指挥调度」发起或结束训练</span></div><div id="training-list" class="training-list"></div></section>
             </section>
 
             <section class="page" id="page-command">
@@ -146,6 +134,17 @@
         <datalist id="known-groups"></datalist>
         <div class="toast" id="toast"></div>
     </div>
+    <section class="login-gate" id="login-gate" hidden>
+        <form class="login-card" id="login-form">
+            <span class="section-kicker">SECURE ACCESS</span>
+            <h2>登录平台</h2>
+            <p>请输入平台账号后查看设备态势。</p>
+            <label>用户名<input id="login-username" name="username" autocomplete="username" required></label>
+            <label>密码<input id="login-password" name="password" type="password" autocomplete="current-password" required></label>
+            <button type="submit" class="btn btn-primary">登录</button>
+            <span class="feedback error" id="login-feedback"></span>
+        </form>
+    </section>
     <script src="/assets/js/map.js"></script>
 </body>
 
