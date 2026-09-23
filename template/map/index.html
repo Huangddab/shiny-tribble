@@ -265,7 +265,11 @@
                                 <label>最大扩散半径 m<input type="number" step="any" min="0.01" id="training-radius" placeholder="200"></label>
                                 <label>扩散速度 m/s<input type="number" step="any" min="0.01" id="training-speed" placeholder="2"></label>
                             </div>
-                            <div id="training-location-hint" class="feedback" hidden>请在地图上点击设置污染源位置，也可手动填写经纬度。</div>
+                            <div id="training-location-picker" class="training-location-picker" hidden>
+                                <div class="training-location-heading"><strong>选择污染源位置</strong><span>点击地图或拖动标记，也可手动输入经纬度</span></div>
+                                <div id="training-location-map" role="application" aria-label="污染源位置选择地图"></div>
+                                <div id="training-location-hint" class="feedback">尚未选择污染源位置</div>
+                            </div>
                             <div class="form-actions"><button type="submit" class="btn btn-primary">开始训练</button><span
                                     class="feedback" id="training-feedback"></span></div>
                         </form>
