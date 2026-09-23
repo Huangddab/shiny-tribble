@@ -8,14 +8,14 @@
 - [x] MQTT 客户端连接、发布、订阅、关闭。
 - [x] `/map` 领导大屏页面与响应式布局。
 - [x] `/api/dashboard/snapshot` 大屏快照接口。
-- [x] Telemetry 订阅 `/chem/telemetry/+`。
-- [x] Events 订阅 `/chem/events/+`。
+- [x] Telemetry 订阅 `chem/telemetry/+`。
+- [x] Events 订阅 `chem/events/+`。
 - [x] Telemetry 自动发现设备并更新位置、模式、PID、电量、RSSI、跌倒状态。
 - [x] 收到 Telemetry 后设备上线。
 - [x] 15 秒无 Telemetry 后设备离线。
 - [x] Events type=0 创建或更新一个设备活动报警。
 - [x] 报警中的当前浓度和临时最高浓度的基础字段。
-- [x] 报警正常结束保留历史，并使用设备 `duration` / `max_conc`。
+- [x] 报警正常结束保留历史，并使用设备 `duration` / `peak_conc`。
 - [x] 报警离线结束记录 `offline` 原因和最后有效 Telemetry 时间。
 - [x] Notify 基础下行：UUID v7、type 3 QoS 0、其他确认类型 QoS 1。
 - [x] Events type=2 ACK 和 10 秒 timeout 基础状态。

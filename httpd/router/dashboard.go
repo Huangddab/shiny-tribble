@@ -52,6 +52,16 @@ func RenameDevice(store *dashboard.Store) gin.HandlerFunc {
 	}
 }
 
+func DeleteDevice(store *dashboard.Store) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if err := store.DeleteDevice(c.Param("device_id")); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		c.Status(http.StatusNoContent)
+	}
+}
+
 func DashboardCommand(store *dashboard.Store) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var request struct {
@@ -335,7 +345,7 @@ func AlertHistory(store *dashboard.Store) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "limit must be between 1 and 1000"})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"items": page.Items, "next_before": page.NextBefore, "next_before_id": page.NextBeforeID})
+		c.JSON(http.StatusOK, gin.H{"items": page.Items, "total": page.Total, "next_before": page.NextBefore, "next_before_id": page.NextBeforeID})
 	}
 }
 

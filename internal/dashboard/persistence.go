@@ -36,6 +36,17 @@ func persistCommand(command model.DashboardCommand, timestamp int64) {
 	}
 }
 
+func deleteExpiredCommands(cutoff int64) (int64, error) {
+	if database.GetDatabase() == nil {
+		return 0, errors.New("database not initialized")
+	}
+	result, err := database.DeleteMany("dashboard_commands", bson.M{"created_at": bson.M{"$lt": cutoff}})
+	if err != nil {
+		return 0, err
+	}
+	return result.DeletedCount, nil
+}
+
 func loadCommandHistory(result, target string, limit int) ([]model.DashboardCommand, error) {
 	if database.GetDatabase() == nil {
 		return nil, errors.New("database not initialized")
@@ -99,6 +110,14 @@ func persistDevice(device model.DashboardDevice) {
 	if _, err := database.UpdateOne("dashboard_devices", bson.M{"_id": device.ID}, bson.M{"$set": document, "$setOnInsert": bson.M{"_id": device.ID}}, options.Update().SetUpsert(true)); err != nil {
 		logrus.Warnf("persist dashboard_devices failed: %v", err)
 	}
+}
+
+func deletePersistedDevice(deviceID string) error {
+	if database.GetDatabase() == nil {
+		return errors.New("database not initialized")
+	}
+	_, err := database.DeleteOne("dashboard_devices", bson.M{"_id": deviceID})
+	return err
 }
 
 type deviceRecord struct {
@@ -216,9 +235,9 @@ func deletePersistedAlert(alertID string) {
 	}
 }
 
-func loadAlertHistory(deviceID, group string, from, to int64, beforeID string, before int64, limit int) ([]model.DashboardAlert, error) {
+func loadAlertHistory(deviceID, group string, from, to int64, beforeID string, before int64, limit int) ([]model.DashboardAlert, int64, error) {
 	if database.GetDatabase() == nil {
-		return nil, errors.New("database not initialized")
+		return nil, 0, errors.New("database not initialized")
 	}
 	filter := bson.M{}
 	if deviceID != "" {
@@ -238,6 +257,7 @@ func loadAlertHistory(deviceID, group string, from, to int64, beforeID string, b
 		}
 		conditions = append(conditions, bson.M{"ended_at_unix": endedAt})
 	}
+	totalConditions := append(bson.A(nil), conditions...)
 	if before > 0 {
 		if beforeID == "" {
 			conditions = append(conditions, bson.M{"ended_at_unix": bson.M{"$lt": before}})
@@ -249,15 +269,24 @@ func loadAlertHistory(deviceID, group string, from, to int64, beforeID string, b
 		}
 	}
 	filter["$and"] = conditions
+	totalFilter := bson.M{}
+	for key, value := range filter {
+		totalFilter[key] = value
+	}
+	totalFilter["$and"] = totalConditions
+	total, err := database.CountDocuments("dashboard_alert_history", totalFilter)
+	if err != nil {
+		return nil, 0, err
+	}
 	var records []alertHistoryRecord
 	if err := database.FindAll("dashboard_alert_history", filter, &records, options.Find().SetSort(bson.D{{Key: "ended_at_unix", Value: -1}, {Key: "_id", Value: -1}}).SetLimit(int64(limit))); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	alerts := make([]model.DashboardAlert, 0, len(records))
 	for _, record := range records {
 		alerts = append(alerts, model.DashboardAlert{ID: record.ID, DeviceID: record.DeviceID, DeviceName: record.DeviceName, Group: record.Group, Substance: record.Substance, Fall: record.Fall, StartedAt: record.StartedAt, StartedAtUnix: record.StartedAtUnix, Duration: record.Duration, Current: record.Current, Max: record.Max, Status: record.Status, Ack: record.Ack, EndReason: record.EndReason, EndedAt: record.EndedAt, EndedAtUnix: record.EndedAtUnix})
 	}
-	return alerts, nil
+	return alerts, total, nil
 }
 
 func cloneDashboardCommand(command model.DashboardCommand) model.DashboardCommand {

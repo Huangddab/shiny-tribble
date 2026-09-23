@@ -160,6 +160,14 @@ func Login(store *dashboard.Store) gin.HandlerFunc {
 	}
 }
 
+func Me() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		username, _ := c.Get("username")
+		role, _ := c.Get("role")
+		c.JSON(http.StatusOK, gin.H{"username": username, "role": role})
+	}
+}
+
 func Logout(store *dashboard.Store) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		actor, ok := c.Get("username")

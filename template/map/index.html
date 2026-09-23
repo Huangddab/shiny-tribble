@@ -22,8 +22,13 @@
                     <h1>化学物质智能监测综合态势平台</h1>
                 </div>
             </div>
-            <div class="topbar-meta"><span id="system-time">--:--:--</span><span class="divider"></span><span
-                    class="connection-pill"><i></i> 数据链路正常</span></div>
+            <div class="topbar-meta"><span id="system-time">--:--:--</span><span class="divider"></span>
+                <div class="user-info" aria-label="当前用户">
+                    <span class="user-avatar" id="user-info-avatar">?</span>
+                    <span class="user-details"><b id="user-info-name">--</b><small id="user-info-role"></small></span>
+                </div>
+                <button type="button" class="btn btn-sm logout-btn" id="logout-btn"><span aria-hidden="true">↪</span>退出登录</button>
+            </div>
         </header>
 
         <nav class="main-nav" aria-label="主导航">
@@ -58,7 +63,6 @@
                     <article class="metric-card">
                         <div class="metric-label">训练设备 <span>TRAINING</span></div><strong
                             id="metric-training">--</strong>
-                        <div class="metric-foot training-text">模式切换闭环中</div>
                     </article>
                 </section>
 
@@ -160,62 +164,69 @@
                                 </div>
                                 <div class="form-row"><label>通知内容</label></div>
                                 <div class="notify-options">
-                                    <button type="button" class="choice active" data-notify="1"><strong>警报</strong></button>
-                                    <button type="button" class="choice" data-notify="2"><strong>正常</strong></button>
-                                    <button type="button" class="choice" data-notify="3"><strong>撤离</strong></button>
+                                    <button type="button" class="choice active"
+                                        data-notify="警报"><strong>警报</strong></button>
+                                    <button type="button" class="choice" data-notify="正常"><strong>正常</strong></button>
+                                    <button type="button" class="choice" data-notify="撤离"><strong>撤离</strong></button>
                                 </div>
-                                <div class="form-actions"><button type="button" class="btn btn-primary" id="quick-send-btn">下发通知</button><span class="feedback" id="quick-feedback"></span></div>
+                                <div class="form-actions"><button type="button" class="btn btn-primary"
+                                        id="quick-send-btn">下发通知</button><span class="feedback"
+                                        id="quick-feedback"></span></div>
                             </div>
                         </article>
 
                         <section class="command-grid">
-                    <article class="panel form-panel">
-                        <div class="panel-heading">
-                            <div><span class="section-kicker">DIRECT COMMAND / 01</span>
-                                <h2>单设备 / 全体指令</h2>
-                            </div>
-                        </div>
-                        <form class="command-form" id="single-command-form">
-                            <div class="form-row">
-                                <label>下发目标<select id="single-device" required></select></label>
-                                <label>指令类型<select id="single-type">
-                                        <option value="0">固定文本通知</option>
-                                        <option value="1">动作指令</option>
-                                        <option value="3">模式切换</option>
-                                    </select></label>
-                            </div>
-                            <div class="dynamic-fields" id="single-fields"></div>
-                            <div class="form-actions"><button type="submit" class="btn btn-primary">下发指令</button><span
-                                    class="feedback" id="single-feedback"></span></div>
-                        </form>
-                    </article>
+                            <article class="panel form-panel">
+                                <div class="panel-heading">
+                                    <div><span class="section-kicker">DIRECT COMMAND / 01</span>
+                                        <h2>单设备 / 全体指令</h2>
+                                    </div>
+                                </div>
+                                <form class="command-form" id="single-command-form">
+                                    <div class="form-row">
+                                        <label>下发目标<select id="single-device" required></select></label>
+                                        <label>指令类型<select id="single-type">
+                                                <option value="0">固定文本通知</option>
+                                                <option value="1">动作指令</option>
+                                                <option value="3">模式切换</option>
+                                            </select></label>
+                                    </div>
+                                    <div class="dynamic-fields" id="single-fields"></div>
+                                    <div class="form-actions"><button type="submit"
+                                            class="btn btn-primary">下发指令</button><span class="feedback"
+                                            id="single-feedback"></span></div>
+                                </form>
+                            </article>
 
-                    <article class="panel form-panel">
-                        <div class="panel-heading">
-                            <div><span class="section-kicker">GROUP COMMAND / 02</span>
-                                <h2>编队指令</h2>
-                            </div>
-                        </div>
-                        <form class="command-form" id="group-command-form">
-                            <div class="form-row">
-                                <label>目标编队<select id="group-target" required></select></label>
-                                <label>指令类型<select id="group-type">
-                                        <option value="0">固定文本通知</option>
-                                        <option value="1">动作指令</option>
-                                        <option value="3">模式切换</option>
-                                    </select></label>
-                            </div>
-                            <div class="dynamic-fields" id="group-fields"></div>
-                            <div class="form-actions"><button type="submit" class="btn btn-primary">下发编队指令</button><span
-                                    class="feedback" id="group-feedback"></span></div>
-                        </form>
-                    </article>
+                            <article class="panel form-panel">
+                                <div class="panel-heading">
+                                    <div><span class="section-kicker">GROUP COMMAND / 02</span>
+                                        <h2>编队指令</h2>
+                                    </div>
+                                </div>
+                                <form class="command-form" id="group-command-form">
+                                    <div class="form-row">
+                                        <label>目标编队<select id="group-target" required></select></label>
+                                        <label>指令类型<select id="group-type">
+                                                <option value="0">固定文本通知</option>
+                                                <option value="1">动作指令</option>
+                                                <option value="3">模式切换</option>
+                                            </select></label>
+                                    </div>
+                                    <div class="dynamic-fields" id="group-fields"></div>
+                                    <div class="form-actions"><button type="submit"
+                                            class="btn btn-primary">下发编队指令</button><span class="feedback"
+                                            id="group-feedback"></span></div>
+                                </form>
+                            </article>
 
                         </section>
                     </div>
                     <article class="panel command-panel dispatch-records">
                         <div class="panel-heading">
-                            <div><span class="section-kicker">COMMAND LOOP</span><h2>指令执行记录</h2></div>
+                            <div><span class="section-kicker">COMMAND LOOP</span>
+                                <h2>指令执行记录</h2>
+                            </div>
                             <span class="subtle-label">执行状态</span>
                         </div>
                         <div id="command-list" class="command-list"></div>
@@ -232,26 +243,36 @@
                 </div>
                 <section class="training-layout">
                     <article class="panel form-panel">
-                        <div class="panel-heading"><div><span class="section-kicker">TRAINING CONTROL / 03</span><h2>新建训练任务</h2></div></div>
+                        <div class="panel-heading">
+                            <div><span class="section-kicker">TRAINING CONTROL / 03</span>
+                                <h2>新建训练任务</h2>
+                            </div>
+                        </div>
                         <form class="command-form" id="training-start-form">
                             <div class="form-row">
                                 <label>参训编队<select id="training-group" required></select></label>
-                                <label>训练名称<input type="text" id="training-name" placeholder="例如：DMMP 扩散演练" required></label>
+                                <label>训练名称<input type="text" id="training-name" placeholder="例如：DMMP 扩散演练"
+                                        required></label>
                             </div>
-                            <label class="checkbox-row"><input type="checkbox" id="training-source-toggle">附加模拟污染源参数</label>
+                            <label class="checkbox-row"><input type="checkbox"
+                                    id="training-source-toggle">附加模拟污染源参数</label>
                             <div class="form-row" id="training-source-fields" hidden>
                                 <label>模拟物质<input type="text" id="training-substance" placeholder="DMMP"></label>
-                                <label>模拟浓度 ppm<input type="number" step="any" id="training-conc" placeholder="5"></label>
-                                <label>影响半径 m<input type="number" step="any" id="training-radius" placeholder="200"></label>
-                                <label>扩散条件<input type="text" id="training-diffusion" placeholder="低风速扩散"></label>
+                                <label>模拟浓度 ppm<input type="number" step="any" id="training-conc"
+                                        placeholder="5"></label>
                             </div>
-                            <div class="form-actions"><button type="submit" class="btn btn-primary">开始训练</button><span class="feedback" id="training-feedback"></span></div>
+                            <div class="form-actions"><button type="submit" class="btn btn-primary">开始训练</button><span
+                                    class="feedback" id="training-feedback"></span></div>
                         </form>
                         <div class="panel-subheading">进行中的训练</div>
                         <div id="active-training-list" class="training-list"></div>
                     </article>
                     <article class="panel training-panel">
-                        <div class="panel-heading"><div><span class="section-kicker">EXERCISE HISTORY</span><h2>训练任务总览</h2></div><span class="subtle-label">TRAINING STATUS</span></div>
+                        <div class="panel-heading">
+                            <div><span class="section-kicker">EXERCISE HISTORY</span>
+                                <h2>训练任务总览</h2>
+                            </div><span class="subtle-label">TRAINING STATUS</span>
+                        </div>
                         <div id="training-list" class="training-list"></div>
                     </article>
                 </section>
@@ -291,7 +312,6 @@
                                     <th>结束时间</th>
                                     <th>持续时间</th>
                                     <th>最高浓度</th>
-                                    <th>结束原因</th>
                                     <th>确认状态</th>
                                 </tr>
                             </thead>
@@ -318,12 +338,15 @@
                     <div class="summary-card"><label>在线 / 离线</label><b id="summary-online-offline">-- / --</b></div>
                     <div class="summary-card"><label>报警设备</label><b id="summary-alerts" class="metric-alert-text">--</b>
                     </div>
-                    <div class="summary-card"><label>训练设备</label><b id="summary-training" class="metric-training-text">--</b>
+                    <div class="summary-card"><label>训练设备</label><b id="summary-training"
+                            class="metric-training-text">--</b>
                     </div>
                 </div>
                 <div class="device-toolbar">
                     <input id="device-search" placeholder="搜索设备编号或名称">
-                    <select id="device-group-filter"><option value="">全部编队</option></select>
+                    <select id="device-group-filter">
+                        <option value="">全部编队</option>
+                    </select>
                     <select id="device-status-filter">
                         <option value="">全部状态</option>
                         <option value="normal">正常</option>
@@ -358,40 +381,43 @@
 
             <section class="page" id="page-settings">
                 <div class="subpage-heading">
-                    <div><span class="section-kicker">SYSTEM SERVICES</span>
+                    <div><span class="section-kicker">ACCESS CONTROL</span>
                         <h2>系统设置</h2>
-                        <p>查看平台核心服务与运行信息。</p>
+                        <p>管理平台登录账号、角色和访问权限。</p>
                     </div>
                 </div>
                 <section class="settings-grid">
-                    <article class="panel setting-card">
-                        <div class="panel-heading">
-                            <div><span class="section-kicker">PLATFORM</span>
-                                <h2>系统信息</h2>
-                            </div><span class="service-state normal">● 正常</span>
-                        </div>
-                        <div class="setting-body">
-                            <div><span>平台版本</span><strong>v1.0.0</strong></div>
-                            <div><span>设备数量</span><strong id="settings-device-count">--</strong></div>
-                            <div><span>最后更新</span><strong id="settings-updated-at">--</strong></div>
-                        </div>
-                    </article>
                     <article class="panel user-management-card">
                         <div class="panel-heading">
-                            <div><span class="section-kicker">ACCESS CONTROL</span><h2>用户管理</h2></div>
+                            <div><span class="section-kicker">USER DIRECTORY</span>
+                                <h2>用户管理</h2>
+                            </div>
                             <span class="subtle-label" id="user-management-state">管理员权限</span>
                         </div>
                         <form class="user-form" id="user-create-form">
                             <input id="user-username" placeholder="用户名" required>
                             <input id="user-password" type="password" placeholder="初始密码（至少 6 位）" minlength="6" required>
                             <input id="user-email" type="email" placeholder="邮箱（可选）">
-                            <select id="user-role"><option value="user">普通用户</option><option value="admin">管理员</option></select>
+                            <select id="user-role">
+                                <option value="user">普通用户</option>
+                                <option value="admin">管理员</option>
+                            </select>
                             <button type="submit" class="btn btn-primary">新增用户</button>
                             <span class="feedback" id="user-feedback"></span>
                         </form>
                         <div class="table-wrap user-table-wrap">
-                            <table><thead><tr><th>用户名</th><th>角色</th><th>邮箱</th><th>创建时间</th><th>操作</th></tr></thead>
-                                <tbody id="user-table-body"></tbody></table>
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>用户名</th>
+                                        <th>角色</th>
+                                        <th>邮箱</th>
+                                        <th>创建时间</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="user-table-body"></tbody>
+                            </table>
                         </div>
                     </article>
                 </section>
@@ -414,7 +440,7 @@
                 <div class="modal-field"><label for="modal-device-name">设备名称</label><input id="modal-device-name"
                         maxlength="32" placeholder="请输入设备名称"></div>
                 <div class="modal-field"><label for="modal-device-group">所属编队</label><input type="text"
-                    id="modal-device-group" list="known-groups" placeholder="输入新编队名称">
+                        id="modal-device-group" list="known-groups" placeholder="输入新编队名称">
                     <div class="group-capacity"><span>当前编队容量</span><b id="group-capacity-text">-- / 10 台</b></div>
                     <div class="capacity-bar">
                         <i id="group-capacity-bar"></i>
@@ -443,6 +469,7 @@
 </body>
 
 {{template "common/footer.html"}}
+
 </html>
 
 {{end}}

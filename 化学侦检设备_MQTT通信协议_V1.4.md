@@ -106,7 +106,7 @@ Unix 时间戳（秒）
 Topic:
 
 ``` text
-/chem/telemetry/{device_id}
+chem/telemetry/{device_id}
 ```
 
 结构：
@@ -240,7 +240,7 @@ type:
 "message":{
     "names":["DMMP"],
     "duration":100,
-    "max_conc":5.3
+    "peak_conc":56
 }
 }
 ```
@@ -248,7 +248,7 @@ type:
 字段：
 
 -   duration：秒
--   max_conc：ppm
+-   peak_conc：报警期间最高浓度 ppm
 
 ## 跌倒结束
 
@@ -292,9 +292,9 @@ failed
 Topic：
 
 ``` text
-/chem/notify
+chem/notify
 
-/chem/{device_id}/notify
+chem/{device_id}/notify
 ```
 
 ## type=0 文本通知
@@ -321,6 +321,47 @@ Topic：
 ```
 
 当前只定义协议，不定义具体参数。暂时不用后期可以添加预置位等设置。
+
+### action=pollution_source 模拟污染源配置
+
+开启训练模式时，平台会额外向同一编队下发本条指令，携带训练页面填写的模拟污染源参数：
+
+``` json
+{
+"id":"uuid-v7",
+"type":1,
+"timestamp":1789720300,
+"message":{
+    "action":"pollution_source",
+    "substance":"DMMP",
+    "conc":5
+}
+}
+```
+
+字段：
+
+-   substance：模拟物质
+-   conc：模拟浓度 ppm
+
+设备执行后返回 Events type=2 ACK。此指令与 type=3 模式切换指令相互独立下发，其 ACK 结果不影响训练任务是否进入 active 状态。
+
+### action=pollution_source_clear 清除模拟污染源
+
+结束训练时，平台会在下发 type=3 恢复监测模式的同时，向同一编队下发本条指令，告知设备停止模拟污染源：
+
+``` json
+{
+"id":"uuid-v7",
+"type":1,
+"timestamp":1789720400,
+"message":{
+    "action":"pollution_source_clear"
+}
+}
+```
+
+只有该训练配置了模拟污染源时才会下发本条指令。设备执行后返回 Events type=2 ACK。
 
 ------------------------------------------------------------------------
 
@@ -408,7 +449,7 @@ Events type=1
 
 ``` text
 duration
-max_conc
+peak_conc
 ```
 
 设备离线：

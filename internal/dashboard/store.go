@@ -38,6 +38,9 @@ type Store struct {
 
 const positionShareInterval = 5 * time.Second
 
+// CommandRetentionPeriod 指令执行记录的最长保留时长，超过后由定时任务清理
+const CommandRetentionPeriod = 182 * 24 * time.Hour
+
 type positionShare struct {
 	target string
 	data   []byte
@@ -92,7 +95,7 @@ type eventEnvelope struct {
 		Result       string   `json:"result"`
 		Reason       string   `json:"reason"`
 		Duration     int      `json:"duration"`
-		MaxConc      float64  `json:"max_conc"`
+		MaxConc      float64  `json:"peak_conc"`
 	} `json:"message"`
 }
 
@@ -104,6 +107,30 @@ func NewStore() *Store {
 		}
 	} else if database.GetDatabase() != nil {
 		logrus.Warnf("load dashboard device registry failed: %v", err)
+	}
+	if commands, err := loadCommandHistory("", "", 1000); err == nil {
+		for index := range commands {
+			command := commands[index]
+			store.commands[command.ID] = &command
+			targets := strings.Split(command.Target, ",")
+			targetSet := make(map[string]struct{}, len(targets))
+			for _, target := range targets {
+				if target = strings.TrimSpace(target); target != "" {
+					targetSet[target] = struct{}{}
+				}
+			}
+			store.commandTargets[command.ID] = targetSet
+		}
+	} else if database.GetDatabase() != nil {
+		logrus.Warnf("load dashboard command history failed: %v", err)
+	}
+	if trainings, err := loadTrainingHistory(1000); err == nil {
+		for index := range trainings {
+			training := trainings[index]
+			store.trainings[training.ID] = &training
+		}
+	} else if database.GetDatabase() != nil {
+		logrus.Warnf("load dashboard training history failed: %v", err)
 	}
 	return store
 }
@@ -128,6 +155,28 @@ func (store *Store) UpdateDeviceName(deviceID, name string) error {
 	store.mu.Unlock()
 	go persistDevice(updated)
 	go persistAudit("system", "device.rename", deviceID, "success", map[string]any{"name": name})
+	return nil
+}
+
+func (store *Store) DeleteDevice(deviceID string) error {
+	deviceID = strings.TrimSpace(deviceID)
+	if deviceID == "" {
+		return fmt.Errorf("device id is required")
+	}
+	store.mu.Lock()
+	if _, ok := store.devices[deviceID]; !ok {
+		store.mu.Unlock()
+		return fmt.Errorf("device %s not found", deviceID)
+	}
+	delete(store.devices, deviceID)
+	delete(store.alerts, alertKey(deviceID))
+	delete(store.alertStarted, alertKey(deviceID))
+	delete(store.lastSampleAt, deviceID)
+	store.mu.Unlock()
+	if err := deletePersistedDevice(deviceID); err != nil && database.GetDatabase() != nil {
+		return fmt.Errorf("delete device %s from database: %w", deviceID, err)
+	}
+	go persistAudit("system", "device.delete", deviceID, "success", nil)
 	return nil
 }
 
@@ -227,8 +276,8 @@ func (store *Store) StartTraining(group, name string) (model.DashboardTraining, 
 }
 
 func (store *Store) StartTrainingWithSource(group, name string, source *model.DashboardPollutionSource) (model.DashboardTraining, error) {
-	if source != nil && (strings.TrimSpace(source.Substance) == "" || source.Conc <= 0 || source.Radius < 0 || strings.TrimSpace(source.Diffusion) == "") {
-		return model.DashboardTraining{}, fmt.Errorf("pollution source requires substance, positive conc, non-negative radius, and diffusion")
+	if source != nil && (strings.TrimSpace(source.Substance) == "" || source.Conc <= 0) {
+		return model.DashboardTraining{}, fmt.Errorf("pollution source requires substance and positive conc")
 	}
 	store.mu.RLock()
 	devices := make([]string, 0)
@@ -244,6 +293,12 @@ func (store *Store) StartTrainingWithSource(group, name string, source *model.Da
 	commandID, err := store.SendGroupNotify(group, 3, map[string]any{"mode": "training"})
 	if err != nil {
 		return model.DashboardTraining{}, err
+	}
+	// 模式切换是训练能否开始的必要条件；污染源配置下发失败不阻断训练，只记录告警
+	if source != nil {
+		if _, err := store.SendGroupNotify(group, 1, map[string]any{"action": "pollution_source", "substance": source.Substance, "conc": source.Conc}); err != nil {
+			logrus.Warnf("send pollution source config to group %s failed: %v", group, err)
+		}
 	}
 	id, err := uuid.NewV7()
 	if err != nil {
@@ -293,9 +348,16 @@ func (store *Store) EndTraining(trainingID string) (model.DashboardTraining, err
 		return model.DashboardTraining{}, fmt.Errorf("training %s not found or already ended", trainingID)
 	}
 	group := training.Group
+	hasSource := training.Source != nil
 	store.mu.Unlock()
 	if _, err := store.SendGroupNotify(group, 3, map[string]any{"mode": "monitor"}); err != nil {
 		return model.DashboardTraining{}, err
+	}
+	// 告知设备停止模拟污染源，失败不阻断训练结束
+	if hasSource {
+		if _, err := store.SendGroupNotify(group, 1, map[string]any{"action": "pollution_source_clear"}); err != nil {
+			logrus.Warnf("send pollution source clear to group %s failed: %v", group, err)
+		}
 	}
 	store.mu.Lock()
 	training.Mode = "monitor"
@@ -336,13 +398,15 @@ func (store *Store) sendNotify(targets []string, notifyType int, message any, br
 	}
 	payload := map[string]any{"type": notifyType, "timestamp": time.Now().Unix(), "message": message}
 	commandID := ""
-	if notifyType == 1 || notifyType == 3 {
+	if notifyType == 0 || notifyType == 1 || notifyType == 3 {
 		id, err := uuid.NewV7()
 		if err != nil {
 			return "", fmt.Errorf("generate command id: %w", err)
 		}
 		commandID = id.String()
-		payload["id"] = commandID
+		if notifyType == 1 || notifyType == 3 {
+			payload["id"] = commandID
+		}
 	}
 	data, err := json.Marshal(payload)
 	if err != nil {
@@ -353,30 +417,40 @@ func (store *Store) sendNotify(targets []string, notifyType int, message any, br
 		qos = 0
 	}
 	if commandID != "" {
+		requiresAck := notifyType == 1 || notifyType == 3
+		result := "success"
+		progress := 100
+		if requiresAck {
+			result = "pending"
+			progress = 0
+		}
 		results := make([]model.DashboardCommandResult, 0, len(targets))
 		targetSet := make(map[string]struct{}, len(targets))
 		for _, target := range targets {
-			results = append(results, model.DashboardCommandResult{DeviceID: target, Result: "pending"})
+			deviceResult := result
+			results = append(results, model.DashboardCommandResult{DeviceID: target, Result: deviceResult})
 			targetSet[target] = struct{}{}
 		}
-		command := model.DashboardCommand{ID: commandID, Action: notifyAction(notifyType, message), Target: strings.Join(targets, ","), Result: "pending", Progress: 0, Results: results}
+		command := model.DashboardCommand{ID: commandID, Action: notifyAction(notifyType, message), Target: strings.Join(targets, ","), Result: result, Progress: progress, Results: results}
 		command.CreatedAtUnix = time.Now().Unix()
 		store.mu.Lock()
 		store.commands[commandID] = &command
 		store.commandTargets[commandID] = targetSet
-		store.commandDeadlines[commandID] = time.Now().Add(10 * time.Second)
+		if requiresAck {
+			store.commandDeadlines[commandID] = time.Now().Add(10 * time.Second)
+		}
 		store.mu.Unlock()
 		go persistCommand(command, time.Now().Unix())
 		go persistAudit("system", "command.send", commandID, "accepted", map[string]any{"type": notifyType, "target": command.Target})
 	}
 	if broadcast {
-		if err := mqtt.Publish("/chem/notify", qos, false, data); err != nil {
+		if err := mqtt.Publish("chem/notify", qos, false, data); err != nil {
 			return "", err
 		}
 		return commandID, nil
 	}
 	for _, target := range targets {
-		if err := mqtt.Publish("/chem/"+target+"/notify", qos, false, data); err != nil {
+		if err := mqtt.Publish("chem/"+target+"/notify", qos, false, data); err != nil {
 			return "", err
 		}
 	}
@@ -408,12 +482,36 @@ func (store *Store) CommandHistory(result, target string, limit int) ([]model.Da
 	return history, nil
 }
 
+// PruneExpiredCommands 删除超过 retention 时长的指令执行记录，供定时任务调用
+func (store *Store) PruneExpiredCommands(retention time.Duration) {
+	cutoff := time.Now().Add(-retention).Unix()
+	store.mu.Lock()
+	for id, command := range store.commands {
+		if command.CreatedAtUnix > 0 && command.CreatedAtUnix < cutoff {
+			delete(store.commands, id)
+			delete(store.commandTargets, id)
+			delete(store.commandDeadlines, id)
+		}
+	}
+	store.mu.Unlock()
+	deleted, err := deleteExpiredCommands(cutoff)
+	if err != nil {
+		if database.GetDatabase() != nil {
+			logrus.Warnf("prune expired dashboard_commands failed: %v", err)
+		}
+		return
+	}
+	if deleted > 0 {
+		logrus.Infof("deleted %d expired dashboard_commands records", deleted)
+	}
+}
+
 func validateNotifyMessage(notifyType int, message any) error {
 	switch notifyType {
 	case 0:
-		value, ok := message.(float64)
-		if !ok || value != math.Trunc(value) || value < 1 || value > 3 {
-			return fmt.Errorf("type 0 message must be 1, 2, or 3")
+		value, ok := message.(string)
+		if !ok || strings.TrimSpace(value) == "" {
+			return fmt.Errorf("type 0 message must be non-empty text")
 		}
 	case 1:
 		values, ok := message.(map[string]any)
@@ -421,12 +519,18 @@ func validateNotifyMessage(notifyType int, message any) error {
 			return fmt.Errorf("type 1 message must be an object")
 		}
 		action, ok := values["action"].(string)
-		_, validAction := map[string]struct{}{"evacuate": {}, "assemble": {}, "silent_on": {}, "silent_off": {}, "goto": {}}[action]
+		_, validAction := map[string]struct{}{"evacuate": {}, "assemble": {}, "silent_on": {}, "silent_off": {}, "goto": {}, "pollution_source": {}, "pollution_source_clear": {}}[action]
 		if !ok || !validAction {
-			return fmt.Errorf("type 1 action must be evacuate, assemble, silent_on, silent_off, or goto")
+			return fmt.Errorf("type 1 action must be evacuate, assemble, silent_on, silent_off, goto, pollution_source, or pollution_source_clear")
 		}
 		if action == "goto" && (!isJSONNumber(values["lat"]) || !isJSONNumber(values["lng"])) {
 			return fmt.Errorf("type 1 goto requires numeric lat and lng")
+		}
+		if action == "pollution_source" {
+			substance, _ := values["substance"].(string)
+			if strings.TrimSpace(substance) == "" || !isJSONNumber(values["conc"]) || values["conc"].(float64) <= 0 {
+				return fmt.Errorf("type 1 pollution_source requires substance and positive conc")
+			}
 		}
 	case 2:
 		values, ok := message.(map[string]any)
@@ -553,6 +657,18 @@ func (store *Store) ShareGroupPositions(group string) error {
 }
 
 func notifyAction(notifyType int, message any) string {
+	if notifyType == 1 {
+		if values, ok := message.(map[string]any); ok {
+			if action, ok := values["action"].(string); ok {
+				if action == "pollution_source" {
+					return "模拟污染源配置"
+				}
+				if action == "pollution_source_clear" {
+					return "清除模拟污染源"
+				}
+			}
+		}
+	}
 	switch notifyType {
 	case 0:
 		return "文本通知"
@@ -562,11 +678,6 @@ func notifyAction(notifyType int, message any) string {
 		return "位置共享"
 	case 3:
 		return "切换模式"
-	}
-	if values, ok := message.(map[string]any); ok {
-		if action, ok := values["action"].(string); ok {
-			return action
-		}
 	}
 	return "动作指令"
 }
@@ -626,6 +737,7 @@ func (store *Store) ConfirmAlert(alertID string) error {
 
 type alertHistoryPage struct {
 	Items        []model.DashboardAlert
+	Total        int64
 	NextBefore   int64
 	NextBeforeID string
 }
@@ -634,13 +746,14 @@ func (store *Store) AlertHistory(deviceID, group string, from, to int64, beforeI
 	if limit <= 0 || limit > 1000 {
 		return alertHistoryPage{}
 	}
-	if history, err := loadAlertHistory(deviceID, group, from, to, beforeID, before, limit); err == nil {
-		return makeAlertHistoryPage(history)
+	if history, total, err := loadAlertHistory(deviceID, group, from, to, beforeID, before, limit); err == nil {
+		return makeAlertHistoryPage(history, total)
 	}
 	store.mu.RLock()
 	defer store.mu.RUnlock()
 	history := make([]model.DashboardAlert, 0, limit)
-	for index := len(store.alertHistory) - 1; index >= 0 && len(history) < limit; index-- {
+	var total int64
+	for index := len(store.alertHistory) - 1; index >= 0; index-- {
 		alert := store.alertHistory[index]
 		if deviceID != "" && alert.DeviceID != deviceID {
 			continue
@@ -654,16 +767,19 @@ func (store *Store) AlertHistory(deviceID, group string, from, to int64, beforeI
 		if to > 0 && alert.EndedAtUnix > to {
 			continue
 		}
+		total++
 		if before > 0 && (alert.EndedAtUnix > before || (alert.EndedAtUnix == before && beforeID != "" && alert.ID >= beforeID)) {
 			continue
 		}
-		history = append(history, alert)
+		if int64(len(history)) < int64(limit) {
+			history = append(history, alert)
+		}
 	}
-	return makeAlertHistoryPage(history)
+	return makeAlertHistoryPage(history, total)
 }
 
-func makeAlertHistoryPage(history []model.DashboardAlert) alertHistoryPage {
-	page := alertHistoryPage{Items: history}
+func makeAlertHistoryPage(history []model.DashboardAlert, total int64) alertHistoryPage {
+	page := alertHistoryPage{Items: history, Total: total}
 	if len(history) > 0 {
 		last := history[len(history)-1]
 		page.NextBefore = last.EndedAtUnix
@@ -856,7 +972,7 @@ func (store *Store) collectPositionSharesLocked(now time.Time) []positionShare {
 
 func (store *Store) publishPositionShares(shares []positionShare) {
 	for _, share := range shares {
-		if err := mqtt.Publish("/chem/"+share.target+"/notify", 0, false, share.data); err != nil {
+		if err := mqtt.Publish("chem/"+share.target+"/notify", 0, false, share.data); err != nil {
 			logrus.Warnf("publish position share for %s failed: %v", share.target, err)
 		}
 	}
@@ -925,6 +1041,15 @@ func (store *Store) Snapshot() model.DashboardSnapshot {
 	for _, training := range store.trainings {
 		snapshot.Trainings = append(snapshot.Trainings, *training)
 	}
+	// map 遍历顺序每次都不同，排序后前端列表才不会在每次刷新时无意义地重新排列
+	sort.Slice(snapshot.Devices, func(left, right int) bool { return snapshot.Devices[left].ID < snapshot.Devices[right].ID })
+	sort.Slice(snapshot.Commands, func(left, right int) bool {
+		if snapshot.Commands[left].CreatedAtUnix != snapshot.Commands[right].CreatedAtUnix {
+			return snapshot.Commands[left].CreatedAtUnix > snapshot.Commands[right].CreatedAtUnix
+		}
+		return snapshot.Commands[left].ID > snapshot.Commands[right].ID
+	})
+	sort.Slice(snapshot.Trainings, func(left, right int) bool { return snapshot.Trainings[left].ID < snapshot.Trainings[right].ID })
 	return snapshot
 }
 

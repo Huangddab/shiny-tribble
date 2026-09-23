@@ -18,7 +18,7 @@ func TestAlertNormalEndUsesDeviceFinalValues(t *testing.T) {
 		Result       string   `json:"result"`
 		Reason       string   `json:"reason"`
 		Duration     int      `json:"duration"`
-		MaxConc      float64  `json:"max_conc"`
+		MaxConc      float64  `json:"peak_conc"`
 	}{Names: []string{"DMMP"}, Conc: 3.8}}, 100)
 	store.applyEvent("device-1", eventEnvelope{Type: 0, Timestamp: 102, Message: struct {
 		Names        []string `json:"names"`
@@ -28,7 +28,7 @@ func TestAlertNormalEndUsesDeviceFinalValues(t *testing.T) {
 		Result       string   `json:"result"`
 		Reason       string   `json:"reason"`
 		Duration     int      `json:"duration"`
-		MaxConc      float64  `json:"max_conc"`
+		MaxConc      float64  `json:"peak_conc"`
 	}{Names: []string{"DMMP"}, Conc: 4.6}}, 102)
 	store.applyEvent("device-1", eventEnvelope{Type: 1, Timestamp: 110, Message: struct {
 		Names        []string `json:"names"`
@@ -38,7 +38,7 @@ func TestAlertNormalEndUsesDeviceFinalValues(t *testing.T) {
 		Result       string   `json:"result"`
 		Reason       string   `json:"reason"`
 		Duration     int      `json:"duration"`
-		MaxConc      float64  `json:"max_conc"`
+		MaxConc      float64  `json:"peak_conc"`
 	}{Duration: 100, MaxConc: 5.3}}, 110)
 
 	snapshot := store.Snapshot()
@@ -61,7 +61,7 @@ func TestSubstanceAndFallShareOneAlert(t *testing.T) {
 		Result       string   `json:"result"`
 		Reason       string   `json:"reason"`
 		Duration     int      `json:"duration"`
-		MaxConc      float64  `json:"max_conc"`
+		MaxConc      float64  `json:"peak_conc"`
 	}{Names: []string{"DMMP"}, Conc: 3.8}}, 200)
 	store.applyEvent("device-2", eventEnvelope{Type: 0, Timestamp: 202, Message: struct {
 		Names        []string `json:"names"`
@@ -71,7 +71,7 @@ func TestSubstanceAndFallShareOneAlert(t *testing.T) {
 		Result       string   `json:"result"`
 		Reason       string   `json:"reason"`
 		Duration     int      `json:"duration"`
-		MaxConc      float64  `json:"max_conc"`
+		MaxConc      float64  `json:"peak_conc"`
 	}{FallDetected: true}}, 202)
 
 	snapshot := store.Snapshot()
@@ -86,7 +86,7 @@ func TestSubstanceAndFallShareOneAlert(t *testing.T) {
 		Result       string   `json:"result"`
 		Reason       string   `json:"reason"`
 		Duration     int      `json:"duration"`
-		MaxConc      float64  `json:"max_conc"`
+		MaxConc      float64  `json:"peak_conc"`
 	}{Names: []string{"DMMP"}, Duration: 10, MaxConc: 4.2}}, 210)
 	snapshot = store.Snapshot()
 	if len(snapshot.Alerts) != 0 || len(snapshot.AlertHistory) != 1 || !snapshot.AlertHistory[0].Fall {
@@ -129,7 +129,7 @@ func TestOfflineEndsAlertAtLastTelemetry(t *testing.T) {
 		Result       string   `json:"result"`
 		Reason       string   `json:"reason"`
 		Duration     int      `json:"duration"`
-		MaxConc      float64  `json:"max_conc"`
+		MaxConc      float64  `json:"peak_conc"`
 	}{Names: []string{"DMMP"}, Conc: 3.8}}, time.Now().Unix()-20)
 
 	snapshot := store.Snapshot()
@@ -145,13 +145,17 @@ func TestValidateNotifyMessage(t *testing.T) {
 		message    any
 		wantErr    bool
 	}{
-		{name: "alarm notification", notifyType: 0, message: float64(1), wantErr: false},
-		{name: "normal notification", notifyType: 0, message: float64(2), wantErr: false},
-		{name: "evacuate notification", notifyType: 0, message: float64(3), wantErr: false},
-		{name: "invalid notification code", notifyType: 0, message: float64(4), wantErr: true},
-		{name: "notification must be numeric", notifyType: 0, message: "集合", wantErr: true},
+		{name: "alarm notification", notifyType: 0, message: "警报", wantErr: false},
+		{name: "normal notification", notifyType: 0, message: "正常", wantErr: false},
+		{name: "evacuate notification", notifyType: 0, message: "撤离", wantErr: false},
+		{name: "empty notification", notifyType: 0, message: " ", wantErr: true},
+		{name: "notification must be text", notifyType: 0, message: float64(1), wantErr: true},
 		{name: "valid action", notifyType: 1, message: map[string]any{"action": "evacuate"}, wantErr: false},
 		{name: "invalid action", notifyType: 1, message: map[string]any{"action": "stop"}, wantErr: true},
+		{name: "valid pollution source", notifyType: 1, message: map[string]any{"action": "pollution_source", "substance": "DMMP", "conc": 5.0}, wantErr: false},
+		{name: "pollution source missing substance", notifyType: 1, message: map[string]any{"action": "pollution_source", "conc": 5.0}, wantErr: true},
+		{name: "pollution source non-positive conc", notifyType: 1, message: map[string]any{"action": "pollution_source", "substance": "DMMP", "conc": 0.0}, wantErr: true},
+		{name: "valid pollution source clear", notifyType: 1, message: map[string]any{"action": "pollution_source_clear"}, wantErr: false},
 		{name: "valid mode", notifyType: 3, message: map[string]any{"mode": "training"}, wantErr: false},
 		{name: "invalid mode", notifyType: 3, message: map[string]any{"mode": "exercise"}, wantErr: true},
 		{name: "valid position list", notifyType: 2, message: map[string]any{"devices": []map[string]any{{"device_id": "d1", "lat": 1.0, "lng": 2.0}}}, wantErr: false},
@@ -209,7 +213,7 @@ func TestTrainingClosesLoopOnCommandAck(t *testing.T) {
 		Result       string   `json:"result"`
 		Reason       string   `json:"reason"`
 		Duration     int      `json:"duration"`
-		MaxConc      float64  `json:"max_conc"`
+		MaxConc      float64  `json:"peak_conc"`
 	}{ID: "cmd1", Result: "success"}}, time.Now().Unix())
 
 	if status := store.trainings["t1"].Status; status != "active" {
@@ -234,7 +238,7 @@ func TestTrainingEndsOnFailedCommandAck(t *testing.T) {
 		Result       string   `json:"result"`
 		Reason       string   `json:"reason"`
 		Duration     int      `json:"duration"`
-		MaxConc      float64  `json:"max_conc"`
+		MaxConc      float64  `json:"peak_conc"`
 	}{ID: "cmd2", Result: "failed"}}, time.Now().Unix())
 
 	if status := store.trainings["t2"].Status; status != "ended" {

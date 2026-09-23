@@ -27,7 +27,46 @@ function hideLogin() {
     authRequired = false;
     $('login-gate').hidden = true;
     refresh();
+    loadCurrentUser();
     refreshTimer = setInterval(refresh, 2000);
+}
+
+var currentUserRole = '';
+function applyRoleVisibility(role) {
+    currentUserRole = role || '';
+    var settingsNav = document.querySelector('.nav-btn[data-page="settings"]');
+    if (!settingsNav) { return; }
+    var isAdmin = currentUserRole === 'admin';
+    settingsNav.hidden = !isAdmin;
+    if (!isAdmin && $('page-settings') && $('page-settings').classList.contains('active')) {
+        document.querySelector('.nav-btn[data-page="dashboard"]').click();
+    }
+}
+
+function loadCurrentUser() {
+    apiRequest('GET', '/api/auth/me').then(function (res) {
+        var username = (res && res.username) || '--';
+        var role = res && res.role === 'admin' ? '管理员' : '普通用户';
+        applyRoleVisibility(res && res.role);
+        setText('user-info-name', username);
+        setText('user-info-role', role);
+        setText('user-info-avatar', username === '--' ? '?' : username.slice(0, 1).toUpperCase());
+    }).catch(function () {
+        applyRoleVisibility('');
+        setText('user-info-name', '--');
+        setText('user-info-role', '');
+        setText('user-info-avatar', '?');
+    });
+}
+
+if ($('logout-btn')) {
+    $('logout-btn').addEventListener('click', function () {
+        apiRequest('POST', '/api/auth/logout').catch(function () { /* proceed to login gate regardless */ }).then(function () {
+            if (refreshTimer) { clearInterval(refreshTimer); }
+            currentUserRole = '';
+            showLogin();
+        });
+    });
 }
 
 function apiRequest(method, url, body) {
@@ -119,7 +158,11 @@ function renderCommands(commands) {
 function renderTrainings(trainings) {
     $('training-list').innerHTML = trainings.length ? trainings.map(function (training) {
         var statusText = { starting: '启动中', active: '进行中', ended: '已结束' }[training.status] || training.status;
-        return '<div class="training-item"><div><strong>' + training.name + '</strong><span>' + training.group + ' · ' + training.devices.length + ' 台设备</span></div><div class="training-state training-' + training.status + '">' + training.mode + ' · ' + statusText + '</div><time>' + training.started_at + (training.ended_at ? ' - ' + training.ended_at : '') + '</time></div>';
+        var source = training.source ? '<span class="training-source">' + escapeHtml(training.source.substance) + ' · ' + training.source.conc + ' ppm</span>' : '';
+        return '<div class="training-item training-item-' + escapeHtml(training.status) + '">' +
+            '<div class="training-item-head"><strong>' + escapeHtml(training.name) + '</strong><span class="training-state training-' + escapeHtml(training.status) + '">' + statusText + '</span></div>' +
+            '<div class="training-item-meta"><span><i>编队</i>' + escapeHtml(training.group) + '</span><span><i>设备</i>' + training.devices.length + ' 台</span><span><i>模式</i>' + (training.mode === 'training' ? '训练' : '监测') + '</span></div>' +
+            '<div class="training-item-foot"><time>' + escapeHtml(training.started_at) + (training.ended_at ? ' → ' + escapeHtml(training.ended_at) : '') + '</time>' + source + '</div></div>';
     }).join('') : '<div class="empty-state">暂无训练任务</div>';
 }
 
@@ -127,9 +170,10 @@ function renderActiveTrainings(trainings) {
     var active = (trainings || []).filter(function (training) { return training.status !== 'ended'; });
     $('active-training-list').innerHTML = active.length ? active.map(function (training) {
         var statusText = { starting: '启动中', active: '进行中' }[training.status] || training.status;
-        return '<div class="training-item"><div><strong>' + training.name + '</strong><span>' + training.group + ' · ' + training.devices.length + ' 台设备</span></div>' +
-            '<button type="button" class="btn btn-sm btn-danger" data-training-id="' + escapeHtml(training.id) + '">结束训练</button>' +
-            '<div class="training-state training-' + training.status + '">' + training.mode + ' · ' + statusText + '</div><time>' + training.started_at + '</time></div>';
+        return '<div class="training-item training-item-' + escapeHtml(training.status) + '">' +
+            '<div class="training-item-head"><strong>' + escapeHtml(training.name) + '</strong><span class="training-state training-' + escapeHtml(training.status) + '">' + statusText + '</span></div>' +
+            '<div class="training-item-meta"><span><i>编队</i>' + escapeHtml(training.group) + '</span><span><i>设备</i>' + training.devices.length + ' 台</span></div>' +
+            '<div class="training-item-foot"><time>' + escapeHtml(training.started_at) + '</time><button type="button" class="btn btn-sm btn-danger" data-training-id="' + escapeHtml(training.id) + '">结束训练</button></div></div>';
     }).join('') : '<div class="empty-state">当前没有进行中的训练</div>';
 }
 
@@ -202,7 +246,8 @@ function renderDevicesManage(devices) {
             '<td class="' + (device.status === 'alert' ? 'concentration-alert' : '') + '">' + device.conc.toFixed(1) + ' / ' + device.threshold.toFixed(1) + ' ppm</td>' +
             '<td class="' + (device.battery < 40 ? 'battery-low' : '') + '">' + device.battery + '%</td>' +
             '<td>' + device.rssi + ' dBm</td><td>' + (device.position_valid ? '已定位' : '未定位') + '</td><td>' + escapeHtml(device.last_seen) + '</td>' +
-            '<td><button type="button" class="manage-btn" data-manage-id="' + escapeHtml(device.id) + '">管理</button></td></tr>';
+            '<td><button type="button" class="manage-btn" data-manage-id="' + escapeHtml(device.id) + '">管理</button>' +
+            '<button type="button" class="manage-btn manage-btn-danger" data-delete-device="' + escapeHtml(device.id) + '">删除</button></td></tr>';
     }).join('');
     applyDeviceFilter();
 }
@@ -262,18 +307,13 @@ function renderSnapshot(snapshot) {
     renderKnownDevices(snapshot.devices || []);
     renderDevicesManage(snapshot.devices || []);
     renderDeviceSummary(snapshot.devices || []);
-    if ($('settings-device-count')) { setText('settings-device-count', snapshot.summary.total_devices + ' 台'); }
-    if ($('settings-updated-at')) { setText('settings-updated-at', new Date(snapshot.updated_at).toLocaleString('zh-CN', { hour12: false })); }
-    document.querySelector('.connection-pill').innerHTML = '<i></i> 数据链路正常';
 }
 
 function refresh() {
     fetch('/api/dashboard/snapshot').then(function (response) {
         if (response.status === 401) { showLogin(); }
         return response.json();
-    }).then(renderSnapshot).catch(function () {
-        document.querySelector('.connection-pill').innerHTML = '<i style="background:#ff3b30;box-shadow:0 0 10px #ff3b30"></i> 数据链路异常';
-    });
+    }).then(renderSnapshot).catch(function () { /* keep last rendered snapshot on transient failure */ });
     fetchGroups();
 }
 function updateClock() { setText('system-time', new Date().toLocaleTimeString('zh-CN', { hour12: false })); }
@@ -282,6 +322,7 @@ function updateClock() { setText('system-time', new Date().toLocaleTimeString('z
 
 document.querySelectorAll('.nav-btn').forEach(function (btn) {
     btn.addEventListener('click', function () {
+        if (btn.dataset.page === 'settings' && currentUserRole !== 'admin') { return; }
         document.querySelectorAll('.nav-btn').forEach(function (b) { b.classList.toggle('active', b === btn); });
         document.querySelectorAll('.page').forEach(function (p) { p.classList.toggle('active', p.id === 'page-' + btn.dataset.page); });
         if (btn.dataset.page === 'history' && !historyLoaded) { loadHistory(); }
@@ -372,6 +413,15 @@ function updateGroupCapacity() {
 if ($('modal-device-group')) { $('modal-device-group').addEventListener('input', updateGroupCapacity); }
 
 document.getElementById('devices-manage-tbody').addEventListener('click', function (e) {
+    var deleteButton = e.target.closest('button[data-delete-device]');
+    if (deleteButton) {
+        if (!window.confirm('确定删除设备“' + deleteButton.dataset.deleteDevice + '”吗？删除后该设备需要重新上报才会再次出现。')) { return; }
+        apiRequest('DELETE', '/api/dashboard/devices/' + encodeURIComponent(deleteButton.dataset.deleteDevice)).then(function () {
+            toast('设备已删除');
+            refresh();
+        }).catch(function (err) { toast(err.message, true); });
+        return;
+    }
     var btn = e.target.closest('button[data-manage-id]');
     if (!btn) { return; }
     var device = latestDevices.find(function (item) { return item.id === btn.dataset.manageId; });
@@ -409,7 +459,7 @@ $('device-modal-save').addEventListener('click', function () {
 
 /* ---------- quick dispatch panel ---------- */
 
-var quickScope = 'all', quickNotify = 1;
+var quickScope = 'all', quickNotify = '警报';
 document.querySelectorAll('.scope-options .choice').forEach(function (btn) {
     btn.addEventListener('click', function () {
         document.querySelectorAll('.scope-options .choice').forEach(function (b) { b.classList.remove('active'); });
@@ -423,7 +473,7 @@ document.querySelectorAll('.notify-options .choice').forEach(function (btn) {
     btn.addEventListener('click', function () {
         document.querySelectorAll('.notify-options .choice').forEach(function (b) { b.classList.remove('active'); });
         btn.classList.add('active');
-        quickNotify = Number(btn.dataset.notify);
+        quickNotify = btn.dataset.notify;
     });
 });
 
@@ -431,6 +481,33 @@ function quickDispatchTarget() {
     if (quickScope === 'all') { return { kind: 'all' }; }
     if (quickScope === 'group') { return { kind: 'group', value: $('quick-group').value }; }
     return { kind: 'device', value: $('quick-device').value };
+}
+
+if ($('quick-send-btn')) {
+    $('quick-send-btn').addEventListener('click', function () {
+        var target = quickDispatchTarget();
+        var feedback = $('quick-feedback');
+        if ((target.kind === 'group' || target.kind === 'device') && !target.value) {
+            feedback.textContent = '请选择调度目标';
+            feedback.className = 'feedback error';
+            return;
+        }
+        feedback.textContent = '下发中…';
+        feedback.className = 'feedback';
+        var request = target.kind === 'group'
+            ? apiRequest('POST', '/api/dashboard/groups/' + encodeURIComponent(target.value) + '/commands', { type: 0, message: quickNotify })
+            : apiRequest('POST', '/api/dashboard/commands', { device_id: target.kind === 'all' ? 'all' : target.value, type: 0, message: quickNotify });
+        request.then(function () {
+            feedback.textContent = '通知已下发';
+            feedback.className = 'feedback success';
+            toast('通知已下发');
+            refresh();
+        }).catch(function (err) {
+            feedback.textContent = err.message;
+            feedback.className = 'feedback error';
+            toast(err.message, true);
+        });
+    });
 }
 
 var trainingModeEnabled = false;
@@ -455,7 +532,7 @@ if ($('training-toggle')) {
 function fieldsMarkup(type) {
     switch (String(type)) {
         case '0':
-            return '<label>通知内容<select class="msg-notify-code"><option value="1">警报</option><option value="2">正常</option><option value="3">撤离</option></select></label>';
+            return '<label>通知内容<select class="msg-notify-code"><option value="警报">警报</option><option value="正常">正常</option><option value="撤离">撤离</option></select></label>';
         case '1':
             return '<label>动作<select class="msg-action">' +
                 '<option value="evacuate">立即撤离</option>' +
@@ -492,7 +569,7 @@ function readMessage(containerId, type) {
     var container = $(containerId);
     switch (String(type)) {
         case '0': {
-            return Number(container.querySelector('.msg-notify-code').value);
+            return container.querySelector('.msg-notify-code').value;
         }
         case '1': {
             var action = container.querySelector('.msg-action').value;
@@ -567,9 +644,7 @@ $('training-start-form').addEventListener('submit', function (e) {
     if ($('training-source-toggle').checked) {
         body.source = {
             substance: $('training-substance').value.trim(),
-            conc: parseFloat($('training-conc').value),
-            radius: parseFloat($('training-radius').value),
-            diffusion: $('training-diffusion').value.trim()
+            conc: parseFloat($('training-conc').value)
         };
     }
     feedback.textContent = '启动中…'; feedback.className = 'feedback';
@@ -644,10 +719,9 @@ function updateHistoryPagination(itemCount) {
 
 function renderHistory(items) {
     $('history-tbody').innerHTML = items.length ? items.map(function (item) {
-        var reasonText = { normal: '正常结束', offline: '设备离线' }[item.end_reason] || item.end_reason || '-';
         var ackText = item.ack === 'confirmed' ? '已确认' : '未确认';
-        return '<tr><td>' + (item.device_name || item.device_id) + '</td><td>' + item.group + '</td><td>' + (item.substance || '-') + '</td><td>' + (item.fall ? '是' : '否') + '</td><td>' + item.started_at + '</td><td>' + (item.ended_at || '-') + '</td><td>' + formatDuration(item.duration) + '</td><td>' + (item.max ? item.max.toFixed(1) + ' ppm' : '-') + '</td><td>' + reasonText + '</td><td>' + ackText + '</td></tr>';
-    }).join('') : '<tr><td colspan="10" class="empty-state">暂无符合条件的记录</td></tr>';
+        return '<tr><td>' + (item.device_name || item.device_id) + '</td><td>' + item.group + '</td><td>' + (item.substance || '-') + '</td><td>' + (item.fall ? '是' : '否') + '</td><td>' + item.started_at + '</td><td>' + (item.ended_at || '-') + '</td><td>' + formatDuration(item.duration) + '</td><td>' + (item.max ? item.max.toFixed(1) + ' ppm' : '-') + '</td><td>' + ackText + '</td></tr>';
+    }).join('') : '<tr><td colspan="9" class="empty-state">暂无符合条件的记录</td></tr>';
 }
 
 function loadHistory(reset) {
@@ -665,7 +739,7 @@ function loadHistory(reset) {
         historyNextCursor = { before: Number(res && res.next_before) || 0, beforeId: (res && res.next_before_id) || '' };
         renderHistory(items);
         updateHistoryPagination(items.length);
-        feedback.textContent = items.length + ' 条记录'; feedback.className = 'feedback success';
+        feedback.textContent = '共 ' + (Number(res && res.total) || 0) + ' 条记录'; feedback.className = 'feedback success';
     }).catch(function (err) {
         feedback.textContent = err.message; feedback.className = 'feedback error';
     });
@@ -687,4 +761,4 @@ $('history-export-btn').addEventListener('click', function () {
     window.open('/api/dashboard/alerts/export?' + historyParams().toString(), '_blank');
 });
 
-refresh(); updateClock(); refreshTimer = setInterval(refresh, 2000); setInterval(updateClock, 1000);
+refresh(); updateClock(); loadCurrentUser(); refreshTimer = setInterval(refresh, 2000); setInterval(updateClock, 1000);

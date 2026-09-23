@@ -59,8 +59,24 @@ func (s *HttpdService) Start() error {
 		}
 	}()
 	go s.dashboard.RunMaintenance(s.ctx, time.Second)
+	go runCommandRetentionJob(s.ctx, s.dashboard)
 	logrus.Infof("httpd service started on %s", s.server.Addr)
 	return nil
+}
+
+// runCommandRetentionJob 定期清理超过 dashboard.CommandRetentionPeriod 的指令执行记录
+func runCommandRetentionJob(ctx context.Context, store *dashboard.Store) {
+	store.PruneExpiredCommands(dashboard.CommandRetentionPeriod)
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			store.PruneExpiredCommands(dashboard.CommandRetentionPeriod)
+		}
+	}
 }
 
 func (s *HttpdService) Stop() error {
@@ -78,6 +94,7 @@ func (s *HttpdService) Stop() error {
 func (s *HttpdService) initHandle() {
 	s.router.POST("/api/auth/login", router.Login(s.dashboard))
 	s.router.POST("/api/auth/logout", router.RequireAuth(), router.Logout(s.dashboard))
+	s.router.GET("/api/auth/me", router.RequireAuth(), router.Me())
 	map_router := s.router.Group("/map")
 	{
 		map_router.GET("", router.DashboardView())
@@ -86,6 +103,7 @@ func (s *HttpdService) initHandle() {
 	dashboardRouter.GET("/snapshot", router.DashboardSnapshot(s.dashboard))
 	dashboardRouter.GET("/devices", router.DashboardDevices(s.dashboard))
 	dashboardRouter.PATCH("/devices/:device_id", router.RenameDevice(s.dashboard))
+	dashboardRouter.DELETE("/devices/:device_id", router.DeleteDevice(s.dashboard))
 	dashboardRouter.GET("/groups", router.DashboardGroups(s.dashboard))
 	dashboardRouter.POST("/commands", router.DashboardCommand(s.dashboard))
 	dashboardRouter.POST("/groups/:group/commands", router.DashboardGroupCommand(s.dashboard))

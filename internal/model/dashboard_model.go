@@ -90,8 +90,6 @@ type DashboardTraining struct {
 type DashboardPollutionSource struct {
 	Substance string  `json:"substance"`
 	Conc      float64 `json:"conc"`
-	Radius    float64 `json:"radius"`
-	Diffusion string  `json:"diffusion"`
 }
 
 type DashboardTelemetrySample struct {
