@@ -177,6 +177,22 @@ func EndTraining(store *dashboard.Store) gin.HandlerFunc {
 	}
 }
 
+func UpdateTrainingSource(store *dashboard.Store) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var source model.DashboardPollutionSource
+		if err := c.ShouldBindJSON(&source); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		training, err := store.UpdateTrainingSource(c.Param("training_id"), source)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusAccepted, training)
+	}
+}
+
 func TrainingHistory(store *dashboard.Store) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		limit, err := strconv.Atoi(c.DefaultQuery("limit", "100"))
