@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"data-server/internal/database"
 	"data-server/internal/model"
 	"data-server/internal/mqtt"
 
@@ -29,6 +30,7 @@ type Store struct {
 	commandDeadlines  map[string]time.Time
 	commandTargets    map[string]map[string]struct{}
 	trainings         map[string]*model.DashboardTraining
+	trainingCommands  map[string]string
 	samples           []model.DashboardTelemetrySample
 	lastSampleAt      map[string]int64
 	lastPositionShare map[string]int64
@@ -95,7 +97,15 @@ type eventEnvelope struct {
 }
 
 func NewStore() *Store {
-	return &Store{devices: make(map[string]*deviceState), alerts: make(map[string]*model.DashboardAlert), alertStarted: make(map[string]int64), commands: make(map[string]*model.DashboardCommand), commandDeadlines: make(map[string]time.Time), commandTargets: make(map[string]map[string]struct{}), trainings: make(map[string]*model.DashboardTraining), lastSampleAt: make(map[string]int64), lastPositionShare: make(map[string]int64)}
+	store := &Store{devices: make(map[string]*deviceState), alerts: make(map[string]*model.DashboardAlert), alertStarted: make(map[string]int64), commands: make(map[string]*model.DashboardCommand), commandDeadlines: make(map[string]time.Time), commandTargets: make(map[string]map[string]struct{}), trainings: make(map[string]*model.DashboardTraining), trainingCommands: make(map[string]string), lastSampleAt: make(map[string]int64), lastPositionShare: make(map[string]int64)}
+	if devices, err := loadDeviceRegistry(); err == nil {
+		for _, device := range devices {
+			store.devices[device.ID] = &deviceState{device: device}
+		}
+	} else if database.GetDatabase() != nil {
+		logrus.Warnf("load dashboard device registry failed: %v", err)
+	}
+	return store
 }
 
 func alertKey(deviceID string) string {
@@ -124,10 +134,6 @@ func (store *Store) UpdateDeviceName(deviceID, name string) error {
 func (store *Store) Groups() []model.DashboardGroup {
 	store.mu.RLock()
 	groups := make(map[string]*model.DashboardGroup)
-	for index := 1; index <= 39; index++ {
-		name := fmt.Sprintf("编队%02d", index)
-		groups[name] = &model.DashboardGroup{Name: name, Capacity: 10}
-	}
 	for _, state := range store.devices {
 		group := state.device.Group
 		if group == "" || group == "未分组" {
@@ -235,7 +241,8 @@ func (store *Store) StartTrainingWithSource(group, name string, source *model.Da
 	if len(devices) == 0 {
 		return model.DashboardTraining{}, fmt.Errorf("group %s has no devices", group)
 	}
-	if _, err := store.SendGroupNotify(group, 3, map[string]any{"mode": "training"}); err != nil {
+	commandID, err := store.SendGroupNotify(group, 3, map[string]any{"mode": "training"})
+	if err != nil {
 		return model.DashboardTraining{}, err
 	}
 	id, err := uuid.NewV7()
@@ -245,10 +252,37 @@ func (store *Store) StartTrainingWithSource(group, name string, source *model.Da
 	training := model.DashboardTraining{ID: id.String(), Name: name, Group: group, Devices: devices, Mode: "training", Status: "starting", StartedAt: time.Now().Format("15:04:05"), Source: source}
 	store.mu.Lock()
 	store.trainings[training.ID] = &training
+	if commandID != "" {
+		store.trainingCommands[commandID] = training.ID
+	}
 	store.mu.Unlock()
 	go persistTraining(training)
 	go persistAudit("system", "training.start", training.ID, "accepted", map[string]any{"group": group, "name": name})
 	return training, nil
+}
+
+// resolveTrainingCommandLocked closes the training mode-switch loop: once a
+// device ACKs (or times out/fails) the type=3 command that started a
+// training, the training status moves off "starting" instead of being stuck
+// there forever. Caller must hold store.mu.
+func (store *Store) resolveTrainingCommandLocked(commandID, result string) {
+	trainingID, ok := store.trainingCommands[commandID]
+	if !ok {
+		return
+	}
+	delete(store.trainingCommands, commandID)
+	training := store.trainings[trainingID]
+	if training == nil || training.Status != "starting" {
+		return
+	}
+	if result == "success" {
+		training.Status = "active"
+	} else {
+		training.Status = "ended"
+		training.EndedAt = time.Now().Format("15:04:05")
+	}
+	persisted := *training
+	go persistTraining(persisted)
 }
 
 func (store *Store) EndTraining(trainingID string) (model.DashboardTraining, error) {
@@ -538,10 +572,10 @@ func notifyAction(notifyType int, message any) string {
 }
 
 func (store *Store) Subscribe() error {
-	if err := mqtt.Subscribe("/chem/telemetry/+", 0, store.handleTelemetry); err != nil {
+	if err := mqtt.Subscribe("chem/telemetry/+", 0, store.handleTelemetry); err != nil {
 		return err
 	}
-	return mqtt.Subscribe("/chem/events/+", 1, store.handleEvent)
+	return mqtt.Subscribe("chem/events/+", 1, store.handleEvent)
 }
 
 func (store *Store) AssignGroup(deviceID, group string) error {
@@ -658,7 +692,7 @@ func (store *Store) handleTelemetry(_ paho.Client, message paho.Message) {
 }
 
 func (store *Store) applyTelemetry(deviceID string, envelope telemetryEnvelope) {
-	now := time.Unix(envelope.Timestamp, 0)
+	now := time.Unix(sanitizeDeviceTimestamp(deviceID, envelope.Timestamp), 0)
 	store.mu.Lock()
 	device := store.devices[deviceID]
 	if device == nil {
@@ -708,7 +742,7 @@ func (store *Store) handleEvent(_ paho.Client, message paho.Message) {
 	if deviceID == "" {
 		return
 	}
-	when := timestamp(event.Timestamp, time.Now().Unix())
+	when := sanitizeDeviceTimestamp(deviceID, timestamp(event.Timestamp, time.Now().Unix()))
 	store.applyEvent(deviceID, event, when)
 }
 
@@ -726,6 +760,7 @@ func (store *Store) applyEvent(deviceID string, event eventEnvelope, when int64)
 			updateCommandResult(command)
 			if command.Result != "pending" {
 				delete(store.commandDeadlines, event.Message.ID)
+				store.resolveTrainingCommandLocked(event.Message.ID, command.Result)
 			}
 			go persistCommand(cloneDashboardCommand(*command), time.Now().Unix())
 		}
@@ -778,31 +813,39 @@ func (store *Store) RunMaintenance(ctx context.Context, interval time.Duration) 
 }
 
 func (store *Store) collectPositionSharesLocked(now time.Time) []positionShare {
-	byGroup := make(map[string][]model.DashboardDevice)
+	targetsByGroup := make(map[string][]model.DashboardDevice)
+	positionsByGroup := make(map[string][]model.DashboardDevice)
 	for _, state := range store.devices {
 		if state.device.Group == "" || state.device.Group == "未分组" || now.Sub(state.lastSeen) >= 15*time.Second {
 			continue
 		}
-		byGroup[state.device.Group] = append(byGroup[state.device.Group], state.device)
+		targetsByGroup[state.device.Group] = append(targetsByGroup[state.device.Group], state.device)
+		if state.device.PositionValid {
+			positionsByGroup[state.device.Group] = append(positionsByGroup[state.device.Group], state.device)
+		}
 	}
 	shares := make([]positionShare, 0)
-	for group, devices := range byGroup {
-		if len(devices) < 2 || now.Unix()-store.lastPositionShare[group] < int64(positionShareInterval/time.Second) {
+	for group, targets := range targetsByGroup {
+		positions := positionsByGroup[group]
+		if len(targets) < 2 || len(positions) == 0 || now.Unix()-store.lastPositionShare[group] < int64(positionShareInterval/time.Second) {
 			continue
 		}
 		store.lastPositionShare[group] = now.Unix()
-		for _, target := range devices {
-			positions := make([]map[string]any, 0, len(devices)-1)
-			for _, device := range devices {
+		for _, target := range targets {
+			shared := make([]map[string]any, 0, len(positions)-1)
+			for _, device := range positions {
 				if device.ID == target.ID {
 					continue
 				}
-				positions = append(positions, map[string]any{"device_id": device.ID, "lat": device.Lat, "lng": device.Lng})
+				shared = append(shared, map[string]any{"device_id": device.ID, "lat": device.Lat, "lng": device.Lng})
 			}
-			if len(positions) > 16 {
-				positions = positions[:16]
+			if len(shared) == 0 {
+				continue
 			}
-			data, err := json.Marshal(map[string]any{"type": 2, "timestamp": now.Unix(), "message": map[string]any{"devices": positions}})
+			if len(shared) > 16 {
+				shared = shared[:16]
+			}
+			data, err := json.Marshal(map[string]any{"type": 2, "timestamp": now.Unix(), "message": map[string]any{"devices": shared}})
 			if err == nil {
 				shares = append(shares, positionShare{target: target.ID, data: data})
 			}
@@ -838,6 +881,11 @@ func (store *Store) expireLocked(now time.Time) {
 		}
 	}
 	for deviceID, state := range store.devices {
+		if state.lastSeen.IsZero() {
+			state.device.Status = "offline"
+			state.device.LastSeen = "未上报"
+			continue
+		}
 		if now.Sub(state.lastSeen) >= 15*time.Second {
 			state.device.Status = "offline"
 		}
@@ -956,6 +1004,30 @@ func timestamp(values ...int64) int64 {
 		}
 	}
 	return time.Now().Unix()
+}
+
+// maxDeviceClockSkew bounds how far a device-reported timestamp may drift from
+// the server clock before it is treated as untrustworthy (e.g. an unset RTC).
+const maxDeviceClockSkew = 5 * time.Minute
+
+// sanitizeDeviceTimestamp falls back to the server receive time when a device
+// reports an implausible clock, so a broken device RTC cannot make the device
+// look permanently offline (time.Since(lastSeen) would never drop below the
+// offline threshold) or corrupt alert/telemetry ordering.
+func sanitizeDeviceTimestamp(deviceID string, reported int64) int64 {
+	now := time.Now().Unix()
+	if reported <= 0 {
+		return now
+	}
+	skew := reported - now
+	if skew < 0 {
+		skew = -skew
+	}
+	if time.Duration(skew)*time.Second > maxDeviceClockSkew {
+		logrus.Warnf("device %s reported implausible timestamp %d (skew %ds), using server time instead", deviceID, reported, skew)
+		return now
+	}
+	return reported
 }
 func formatLastSeen(age time.Duration) string {
 	if age < time.Second {

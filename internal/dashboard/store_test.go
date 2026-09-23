@@ -166,12 +166,102 @@ func TestValidateNotifyMessage(t *testing.T) {
 	}
 }
 
+func TestTelemetryRejectsObjectAlarmNames(t *testing.T) {
+	payload := []byte(`{"message":{"gnss":{"fixed":false,"lat":22.6141186,"speed":0,"lng":113.836998},"device_id":"864793080139046","timestamp":946685775,"sensor":{"pid":{"conc":0,"alarm":false},"battery":{"pct":95,"voltage":8.3872185},"alarm":{"names":{}}},"rssi":-57,"gsensor":{"magnitude":1.4884094,"fall_detected":false},"mode":"monitor"},"timestamp":946685775}`)
+	var envelope telemetryEnvelope
+	if err := json.Unmarshal(payload, &envelope); err == nil {
+		t.Fatal("expected protocol violation for object-shaped alarm names")
+	}
+}
+
+func TestTelemetryWithLegacyClockStillOnboardsDevice(t *testing.T) {
+	payload := []byte(`{"message":{"gnss":{"fixed":false,"lat":22.6141186,"speed":0,"lng":113.836998},"device_id":"864793080139046","timestamp":946684914,"sensor":{"pid":{"conc":0,"alarm":false,"threshold":50},"battery":{"pct":95,"voltage":8.3718004},"alarm":{"names":[]}},"rssi":-60,"gsensor":{"magnitude":1.5005593,"fall_detected":false},"mode":"monitor"},"timestamp":946684914}`)
+	var envelope telemetryEnvelope
+	if err := json.Unmarshal(payload, &envelope); err != nil {
+		t.Fatalf("decode telemetry: %v", err)
+	}
+	if err := validateTelemetry(envelope); err != nil {
+		t.Fatalf("validate telemetry: %v", err)
+	}
+
+	store := NewStore()
+	store.applyTelemetry(envelope.Message.DeviceID, envelope)
+	snapshot := store.Snapshot()
+	if len(snapshot.Devices) != 1 || snapshot.Devices[0].ID != "864793080139046" {
+		t.Fatalf("expected device in snapshot, got %+v", snapshot.Devices)
+	}
+	if snapshot.Devices[0].Status == "offline" {
+		t.Fatalf("expected device to be online despite legacy device clock, got %+v", snapshot.Devices[0])
+	}
+}
+
+func TestTrainingClosesLoopOnCommandAck(t *testing.T) {
+	store := NewStore()
+	store.trainings["t1"] = &model.DashboardTraining{ID: "t1", Mode: "training", Status: "starting"}
+	store.trainingCommands["cmd1"] = "t1"
+	store.commands["cmd1"] = &model.DashboardCommand{ID: "cmd1", Results: []model.DashboardCommandResult{{DeviceID: "device-1", Result: "pending"}}}
+
+	store.applyEvent("device-1", eventEnvelope{Type: 2, Message: struct {
+		Names        []string `json:"names"`
+		Conc         float64  `json:"conc"`
+		FallDetected bool     `json:"fall_detected"`
+		ID           string   `json:"id"`
+		Result       string   `json:"result"`
+		Reason       string   `json:"reason"`
+		Duration     int      `json:"duration"`
+		MaxConc      float64  `json:"max_conc"`
+	}{ID: "cmd1", Result: "success"}}, time.Now().Unix())
+
+	if status := store.trainings["t1"].Status; status != "active" {
+		t.Fatalf("expected training to become active after ACK, got %q", status)
+	}
+	if _, stillTracked := store.trainingCommands["cmd1"]; stillTracked {
+		t.Fatal("expected command mapping to be cleared after resolution")
+	}
+}
+
+func TestTrainingEndsOnFailedCommandAck(t *testing.T) {
+	store := NewStore()
+	store.trainings["t2"] = &model.DashboardTraining{ID: "t2", Mode: "training", Status: "starting"}
+	store.trainingCommands["cmd2"] = "t2"
+	store.commands["cmd2"] = &model.DashboardCommand{ID: "cmd2", Results: []model.DashboardCommandResult{{DeviceID: "device-2", Result: "pending"}}}
+
+	store.applyEvent("device-2", eventEnvelope{Type: 2, Message: struct {
+		Names        []string `json:"names"`
+		Conc         float64  `json:"conc"`
+		FallDetected bool     `json:"fall_detected"`
+		ID           string   `json:"id"`
+		Result       string   `json:"result"`
+		Reason       string   `json:"reason"`
+		Duration     int      `json:"duration"`
+		MaxConc      float64  `json:"max_conc"`
+	}{ID: "cmd2", Result: "failed"}}, time.Now().Unix())
+
+	if status := store.trainings["t2"].Status; status != "ended" {
+		t.Fatalf("expected training to end after failed ACK, got %q", status)
+	}
+}
+
+func TestGroupsOnlyContainAssignedDevices(t *testing.T) {
+	store := NewStore()
+	if groups := store.Groups(); len(groups) != 0 {
+		t.Fatalf("expected no default groups, got %+v", groups)
+	}
+
+	store.devices["device-1"] = &deviceState{device: model.DashboardDevice{ID: "device-1", Group: "未分组", Status: "normal"}}
+	store.devices["device-2"] = &deviceState{device: model.DashboardDevice{ID: "device-2", Group: "编队A", Status: "normal"}}
+	groups := store.Groups()
+	if len(groups) != 1 || groups[0].Name != "编队A" || groups[0].Total != 1 {
+		t.Fatalf("expected only assigned group, got %+v", groups)
+	}
+}
+
 func TestCollectPositionSharesUsesOnlinePeersOnly(t *testing.T) {
 	store := NewStore()
 	now := time.Unix(100, 0)
-	store.devices["A"] = &deviceState{device: model.DashboardDevice{ID: "A", Group: "编队01", Lat: 22.1, Lng: 114.1}, lastSeen: now}
-	store.devices["B"] = &deviceState{device: model.DashboardDevice{ID: "B", Group: "编队01", Lat: 22.2, Lng: 114.2}, lastSeen: now}
-	store.devices["C"] = &deviceState{device: model.DashboardDevice{ID: "C", Group: "编队02", Lat: 22.3, Lng: 114.3}, lastSeen: now}
+	store.devices["A"] = &deviceState{device: model.DashboardDevice{ID: "A", Group: "编队01", Lat: 22.1, Lng: 114.1, PositionValid: true}, lastSeen: now}
+	store.devices["B"] = &deviceState{device: model.DashboardDevice{ID: "B", Group: "编队01", Lat: 22.2, Lng: 114.2, PositionValid: true}, lastSeen: now}
+	store.devices["C"] = &deviceState{device: model.DashboardDevice{ID: "C", Group: "编队02", Lat: 22.3, Lng: 114.3, PositionValid: true}, lastSeen: now}
 
 	store.mu.Lock()
 	shares := store.collectPositionSharesLocked(now.Add(5 * time.Second))

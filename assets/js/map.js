@@ -104,7 +104,7 @@ function renderDevices(devices) {
 }
 
 function renderCommands(commands) {
-    $('command-list').innerHTML = commands.map(function (command) {
+    var html = commands.map(function (command) {
         var pending = command.result === 'pending';
         var resultText = { success: '成功', failed: '失败', timeout: '超时', pending: '执行中' }[command.result] || command.result;
         var deviceResults = (command.results || []).map(function (result) {
@@ -113,6 +113,7 @@ function renderCommands(commands) {
         }).join('');
         return '<div class="command-item ' + (pending ? 'command-pending' : '') + '"><div class="command-line"><span>' + command.action + ' · ' + command.target + '</span><span>' + resultText + ' ' + command.progress + '%</span></div><div class="progress-track"><i style="width:' + command.progress + '%"></i></div><div class="command-results">' + deviceResults + '</div><div class="command-id">' + command.id + '</div></div>';
     }).join('');
+    ['command-list', 'dashboard-command-list'].forEach(function (id) { var el = $(id); if (el) { el.innerHTML = html; } });
 }
 
 function renderTrainings(trainings) {
@@ -159,36 +160,86 @@ function renderDeviceSelect(devices) {
     }));
     select.innerHTML = options.join('');
     select.value = ids.indexOf(current) >= 0 ? current : 'all';
+
+    var quickDevice = $('quick-device');
+    if (quickDevice) {
+        var quickCurrent = quickDevice.value;
+        var deviceOptions = devices.map(function (device) {
+            return '<option value="' + escapeHtml(device.id) + '">' + escapeHtml(device.name) + ' (' + escapeHtml(device.id) + ')</option>';
+        }).join('');
+        quickDevice.innerHTML = deviceOptions;
+        if (devices.some(function (device) { return device.id === quickCurrent; })) { quickDevice.value = quickCurrent; }
+    }
 }
 
 function renderKnownDevices(devices) {
     $('known-devices').innerHTML = devices.map(function (device) { return '<option value="' + escapeHtml(device.id) + '">'; }).join('');
 }
 
-function renderDevicesManage(devices) {
-    $('devices-manage-tbody').innerHTML = devices.map(function (device) {
-        var statusText = { normal: '正常', alert: '报警', offline: '离线' }[device.status] || device.status;
-        return '<tr><td>' + escapeHtml(device.id) + '</td><td>' + escapeHtml(device.name) + '</td><td>' + escapeHtml(device.group) + '</td>' +
-            '<td><span class="status-dot status-' + device.status + '"></span>' + statusText + '</td>' +
-            '<td class="' + (device.mode === 'training' ? 'mode-training' : 'mode-monitor') + '">' + (device.mode === 'training' ? '训练' : '监测') + '</td>' +
-            '<td class="' + (device.battery < 40 ? 'battery-low' : '') + '">' + device.battery + '%</td>' +
-            '<td><div class="table-actions">' +
-            '<input class="rename-input" type="text" value="' + escapeHtml(device.name) + '" placeholder="新名称">' +
-            '<button type="button" class="btn btn-sm" data-rename-id="' + escapeHtml(device.id) + '">重命名</button>' +
-            '<input class="group-input" type="text" value="' + escapeHtml(device.group) + '" list="known-groups" placeholder="编队">' +
-            '<button type="button" class="btn btn-sm" data-group-id="' + escapeHtml(device.id) + '">分配编队</button>' +
-            '</div></td></tr>';
-    }).join('');
+var latestDevices = [];
+
+function renderDeviceSummary(devices) {
+    var total = devices.length;
+    var online = devices.filter(function (device) { return device.status !== 'offline'; }).length;
+    var offline = devices.filter(function (device) { return device.status === 'offline'; }).length;
+    var alerts = devices.filter(function (device) { return device.status === 'alert'; }).length;
+    var training = devices.filter(function (device) { return device.mode === 'training'; }).length;
+    if ($('summary-total')) { setText('summary-total', total); }
+    if ($('summary-online-offline')) { setText('summary-online-offline', online + ' / ' + offline); }
+    if ($('summary-alerts')) { setText('summary-alerts', alerts); }
+    if ($('summary-training')) { setText('summary-training', training); }
 }
 
+function renderDevicesManage(devices) {
+    latestDevices = devices;
+    $('devices-manage-tbody').innerHTML = devices.map(function (device) {
+        var statusText = { normal: '正常', alert: '报警', offline: '离线' }[device.status] || device.status;
+        return '<tr data-status="' + device.status + '" data-group="' + escapeHtml(device.group || '') + '" data-search="' + escapeHtml((device.id + ' ' + device.name).toLowerCase()) + '">' +
+            '<td class="device-id-cell">' + escapeHtml(device.id) + '</td><td>' + escapeHtml(device.name) + '</td>' +
+            '<td>' + (device.group ? '<span class="group-tag">' + escapeHtml(device.group) + '</span>' : '未分组') + '</td>' +
+            '<td><span class="status-dot status-' + device.status + '"></span>' + statusText + '</td>' +
+            '<td class="' + (device.mode === 'training' ? 'mode-training' : 'mode-monitor') + '">' + (device.mode === 'training' ? '训练' : '监测') + '</td>' +
+            '<td class="' + (device.status === 'alert' ? 'concentration-alert' : '') + '">' + device.conc.toFixed(1) + ' / ' + device.threshold.toFixed(1) + ' ppm</td>' +
+            '<td class="' + (device.battery < 40 ? 'battery-low' : '') + '">' + device.battery + '%</td>' +
+            '<td>' + device.rssi + ' dBm</td><td>' + (device.position_valid ? '已定位' : '未定位') + '</td><td>' + escapeHtml(device.last_seen) + '</td>' +
+            '<td><button type="button" class="manage-btn" data-manage-id="' + escapeHtml(device.id) + '">管理</button></td></tr>';
+    }).join('');
+    applyDeviceFilter();
+}
+
+function applyDeviceFilter() {
+    var searchEl = $('device-search'), groupEl = $('device-group-filter'), statusEl = $('device-status-filter');
+    if (!searchEl) { return; }
+    var query = searchEl.value.trim().toLowerCase();
+    var group = groupEl.value;
+    var status = statusEl.value;
+    document.querySelectorAll('#devices-manage-tbody tr').forEach(function (row) {
+        var matches = (!query || row.dataset.search.indexOf(query) >= 0) &&
+            (!group || row.dataset.group === group) &&
+            (!status || row.dataset.status === status);
+        row.hidden = !matches;
+    });
+}
+
+var latestGroups = [];
+
 function renderGroupSelects(groups) {
-    var options = groups.map(function (group) { return '<option value="' + escapeHtml(group.name) + '">' + escapeHtml(group.name) + ' (' + group.total + '台)</option>'; }).join('');
-    ['group-target', 'training-group'].forEach(function (id) {
+    latestGroups = groups;
+    var options = groups.map(function (group) { return '<option value="' + escapeHtml(group.name) + '">' + escapeHtml(group.name) + ' (' + group.total + '/' + group.capacity + '台)</option>'; }).join('');
+    ['group-target', 'training-group', 'quick-group'].forEach(function (id) {
         var select = $(id);
+        if (!select) { return; }
         var current = select.value;
         select.innerHTML = options;
         if (current && groups.some(function (group) { return group.name === current; })) { select.value = current; }
     });
+    if ($('device-group-filter')) {
+        var filterSelect = $('device-group-filter');
+        var currentFilter = filterSelect.value;
+        filterSelect.innerHTML = '<option value="">全部编队</option>' + options;
+        filterSelect.value = currentFilter;
+    }
+    if ($('modal-device-group')) { $('modal-device-group').placeholder = groups.length ? '选择已有或输入新编队' : '输入新编队名称'; }
     $('known-groups').innerHTML = groups.map(function (group) { return '<option value="' + escapeHtml(group.name) + '">'; }).join('');
 }
 
@@ -210,6 +261,7 @@ function renderSnapshot(snapshot) {
     renderDeviceSelect(snapshot.devices || []);
     renderKnownDevices(snapshot.devices || []);
     renderDevicesManage(snapshot.devices || []);
+    renderDeviceSummary(snapshot.devices || []);
     if ($('settings-device-count')) { setText('settings-device-count', snapshot.summary.total_devices + ' 台'); }
     if ($('settings-updated-at')) { setText('settings-updated-at', new Date(snapshot.updated_at).toLocaleString('zh-CN', { hour12: false })); }
     document.querySelector('.connection-pill').innerHTML = '<i></i> 数据链路正常';
@@ -233,8 +285,153 @@ document.querySelectorAll('.nav-btn').forEach(function (btn) {
         document.querySelectorAll('.nav-btn').forEach(function (b) { b.classList.toggle('active', b === btn); });
         document.querySelectorAll('.page').forEach(function (p) { p.classList.toggle('active', p.id === 'page-' + btn.dataset.page); });
         if (btn.dataset.page === 'history' && !historyLoaded) { loadHistory(); }
+        if (btn.dataset.page === 'settings') { loadUsers(); }
     });
 });
+
+function renderUsers(users) {
+    var body = $('user-table-body');
+    if (!body) { return; }
+    body.innerHTML = users.length ? users.map(function (user) {
+        var role = user.role === 'admin' ? '管理员' : '普通用户';
+        var created = user.created_at ? new Date(user.created_at).toLocaleString('zh-CN', { hour12: false }) : '-';
+        return '<tr><td>' + escapeHtml(user.username) + '</td><td>' + role + '</td><td>' + escapeHtml(user.email || '-') + '</td><td>' + created + '</td>' +
+            '<td><button type="button" class="btn btn-sm btn-danger" data-delete-user="' + escapeHtml(user.username) + '">删除</button></td></tr>';
+    }).join('') : '<tr><td colspan="5" class="empty-state">暂无用户</td></tr>';
+}
+
+function loadUsers() {
+    var state = $('user-management-state');
+    apiRequest('GET', '/api/dashboard/users').then(function (res) {
+        renderUsers((res && res.items) || []);
+        if (state) { state.textContent = '管理员权限'; }
+    }).catch(function (err) {
+        if (state) { state.textContent = err.message.indexOf('administrator') >= 0 ? '仅管理员可用' : '加载失败'; }
+        if ($('user-table-body')) { $('user-table-body').innerHTML = '<tr><td colspan="5" class="empty-state">暂无权限查看</td></tr>'; }
+    });
+}
+
+if ($('user-create-form')) {
+    $('user-create-form').addEventListener('submit', function (event) {
+        event.preventDefault();
+        var feedback = $('user-feedback');
+        feedback.textContent = '创建中…'; feedback.className = 'feedback';
+        apiRequest('POST', '/api/dashboard/users', {
+            username: $('user-username').value.trim(),
+            password: $('user-password').value,
+            email: $('user-email').value.trim(),
+            role: $('user-role').value
+        }).then(function () {
+            feedback.textContent = '用户已创建'; feedback.className = 'feedback success';
+            $('user-create-form').reset();
+            loadUsers();
+        }).catch(function (err) {
+            feedback.textContent = err.message; feedback.className = 'feedback error';
+        });
+    });
+}
+
+if ($('user-table-body')) {
+    $('user-table-body').addEventListener('click', function (event) {
+        var button = event.target.closest('button[data-delete-user]');
+        if (!button || !window.confirm('确定删除用户“' + button.dataset.deleteUser + '”吗？')) { return; }
+        apiRequest('DELETE', '/api/dashboard/users/' + encodeURIComponent(button.dataset.deleteUser)).then(function () {
+            toast('用户已删除'); loadUsers();
+        }).catch(function (err) { toast(err.message, true); });
+    });
+}
+
+document.querySelectorAll('[data-page-link]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        var target = btn.dataset.pageLink;
+        var navBtn = document.querySelector('.nav-btn[data-page="' + target + '"]');
+        if (navBtn) { navBtn.click(); }
+    });
+});
+
+['device-search', 'device-group-filter', 'device-status-filter'].forEach(function (id) {
+    var el = $(id);
+    if (!el) { return; }
+    el.addEventListener('input', applyDeviceFilter);
+    el.addEventListener('change', applyDeviceFilter);
+});
+
+/* ---------- device management modal ---------- */
+
+var editingDeviceId = null;
+function updateGroupCapacity() {
+    var group = $('modal-device-group').value;
+    var groupInfo = latestGroups.find(function (item) { return item.name === group; });
+    var currentDevice = latestDevices.find(function (device) { return device.id === editingDeviceId; });
+    var alreadyInGroup = currentDevice && currentDevice.group === group;
+    var total = groupInfo ? groupInfo.total - (alreadyInGroup ? 1 : 0) : 0;
+    var capacity = groupInfo ? groupInfo.capacity : 10;
+    setText('group-capacity-text', group ? (total + ' / ' + capacity + ' 台') : '不限制');
+    $('group-capacity-bar').style.width = group ? Math.min(100, (total / capacity) * 100) + '%' : '0%';
+}
+if ($('modal-device-group')) { $('modal-device-group').addEventListener('input', updateGroupCapacity); }
+
+document.getElementById('devices-manage-tbody').addEventListener('click', function (e) {
+    var btn = e.target.closest('button[data-manage-id]');
+    if (!btn) { return; }
+    var device = latestDevices.find(function (item) { return item.id === btn.dataset.manageId; });
+    if (!device) { return; }
+    editingDeviceId = device.id;
+    setText('modal-device-id', 'DEVICE ID · ' + device.id);
+    $('modal-device-name').value = device.name;
+    $('modal-device-group').value = device.group || '';
+    updateGroupCapacity();
+    $('device-modal-backdrop').classList.add('show');
+    $('modal-device-name').focus();
+});
+
+function closeDeviceModal() { $('device-modal-backdrop').classList.remove('show'); editingDeviceId = null; }
+$('device-modal-close').addEventListener('click', closeDeviceModal);
+$('device-modal-cancel').addEventListener('click', closeDeviceModal);
+$('device-modal-backdrop').addEventListener('click', function (e) { if (e.target === $('device-modal-backdrop')) { closeDeviceModal(); } });
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { closeDeviceModal(); } });
+
+$('device-modal-save').addEventListener('click', function () {
+    if (!editingDeviceId) { return; }
+    var name = $('modal-device-name').value.trim();
+    var group = $('modal-device-group').value;
+    if (!name) { toast('设备名称不能为空', true); return; }
+    var device = latestDevices.find(function (item) { return item.id === editingDeviceId; });
+    var tasks = [];
+    if (!device || device.name !== name) { tasks.push(apiRequest('PATCH', '/api/dashboard/devices/' + encodeURIComponent(editingDeviceId), { name: name })); }
+    if (group && (!device || device.group !== group)) { tasks.push(apiRequest('PUT', '/api/dashboard/devices/' + encodeURIComponent(editingDeviceId) + '/group', { group: group })); }
+    Promise.all(tasks).then(function () {
+        toast('设备信息已更新');
+        closeDeviceModal();
+        refresh();
+    }).catch(function (err) { toast(err.message, true); });
+});
+
+/* ---------- quick dispatch panel ---------- */
+
+var quickScope = 'all', quickNotify = 1;
+document.querySelectorAll('.scope-options .choice').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        document.querySelectorAll('.scope-options .choice').forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        quickScope = btn.dataset.scope;
+        $('quick-group-row').hidden = quickScope !== 'group';
+        $('quick-device-row').hidden = quickScope !== 'device';
+    });
+});
+document.querySelectorAll('.notify-options .choice').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        document.querySelectorAll('.notify-options .choice').forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        quickNotify = Number(btn.dataset.notify);
+    });
+});
+
+function quickDispatchTarget() {
+    if (quickScope === 'all') { return { kind: 'all' }; }
+    if (quickScope === 'group') { return { kind: 'group', value: $('quick-group').value }; }
+    return { kind: 'device', value: $('quick-device').value };
+}
 
 var trainingModeEnabled = false;
 if ($('training-toggle')) {
@@ -274,7 +471,7 @@ function fieldsMarkup(type) {
         case '2':
             return '';
         case '3':
-            return '<label>目标模式<select class="msg-mode"><option value="training">训练 training</option><option value="monitor">监测 monitor</option></select></label>';
+            return '<label>目标模式<select class="msg-mode"><option value="training">训练</option><option value="monitor">监测</option></select></label>';
         default:
             return '';
     }
@@ -404,29 +601,14 @@ $('alert-list').addEventListener('click', function (e) {
     }).catch(function (err) { toast(err.message, true); });
 });
 
-$('devices-manage-tbody').addEventListener('click', function (e) {
-    var renameBtn = e.target.closest('button[data-rename-id]');
-    if (renameBtn) {
-        var name = renameBtn.closest('tr').querySelector('.rename-input').value.trim();
-        if (!name) { toast('请输入设备名称', true); return; }
-        apiRequest('PATCH', '/api/dashboard/devices/' + encodeURIComponent(renameBtn.dataset.renameId), { name: name }).then(function () {
-            toast('设备名称已更新'); refresh();
-        }).catch(function (err) { toast(err.message, true); });
-        return;
-    }
-    var groupBtn = e.target.closest('button[data-group-id]');
-    if (groupBtn) {
-        var group = groupBtn.closest('tr').querySelector('.group-input').value.trim();
-        if (!group) { toast('请输入编队名称', true); return; }
-        apiRequest('PUT', '/api/dashboard/devices/' + encodeURIComponent(groupBtn.dataset.groupId) + '/group', { group: group }).then(function () {
-            toast('编队已更新'); refresh();
-        }).catch(function (err) { toast(err.message, true); });
-    }
-});
 
 /* ---------- alert history ---------- */
 
 var historyLoaded = false;
+var historyPageSize = 20;
+var historyPageIndex = 0;
+var historyCursors = [{ before: '', beforeId: '' }];
+var historyNextCursor = { before: 0, beforeId: '' };
 function toUnix(value) {
     if (!value) { return ''; }
     var time = new Date(value).getTime();
@@ -446,6 +628,20 @@ function historyParams() {
     return params;
 }
 
+function resetHistoryPagination() {
+    historyPageIndex = 0;
+    historyCursors = [{ before: '', beforeId: '' }];
+    historyNextCursor = { before: 0, beforeId: '' };
+}
+
+function updateHistoryPagination(itemCount) {
+    var previous = $('history-prev-btn');
+    var next = $('history-next-btn');
+    previous.disabled = historyPageIndex === 0;
+    next.disabled = itemCount < historyPageSize || !historyNextCursor.before;
+    setText('history-page-label', '第 ' + (historyPageIndex + 1) + ' 页');
+}
+
 function renderHistory(items) {
     $('history-tbody').innerHTML = items.length ? items.map(function (item) {
         var reasonText = { normal: '正常结束', offline: '设备离线' }[item.end_reason] || item.end_reason || '-';
@@ -454,22 +650,39 @@ function renderHistory(items) {
     }).join('') : '<tr><td colspan="10" class="empty-state">暂无符合条件的记录</td></tr>';
 }
 
-function loadHistory() {
+function loadHistory(reset) {
     historyLoaded = true;
+    if (reset) { resetHistoryPagination(); }
     var params = historyParams();
-    params.set('limit', '200');
+    var cursor = historyCursors[historyPageIndex];
+    params.set('limit', String(historyPageSize));
+    if (cursor.before) { params.set('before', String(cursor.before)); }
+    if (cursor.beforeId) { params.set('before_id', cursor.beforeId); }
     var feedback = $('history-feedback');
     feedback.textContent = '查询中…'; feedback.className = 'feedback';
     apiRequest('GET', '/api/dashboard/alerts/history?' + params.toString()).then(function (res) {
         var items = (res && res.items) || [];
+        historyNextCursor = { before: Number(res && res.next_before) || 0, beforeId: (res && res.next_before_id) || '' };
         renderHistory(items);
-        feedback.textContent = '共 ' + items.length + ' 条记录'; feedback.className = 'feedback success';
+        updateHistoryPagination(items.length);
+        feedback.textContent = items.length + ' 条记录'; feedback.className = 'feedback success';
     }).catch(function (err) {
         feedback.textContent = err.message; feedback.className = 'feedback error';
     });
 }
 
-$('history-filter-form').addEventListener('submit', function (e) { e.preventDefault(); loadHistory(); });
+$('history-filter-form').addEventListener('submit', function (e) { e.preventDefault(); loadHistory(true); });
+$('history-prev-btn').addEventListener('click', function () {
+    if (historyPageIndex === 0) { return; }
+    historyPageIndex -= 1;
+    loadHistory(false);
+});
+$('history-next-btn').addEventListener('click', function () {
+    if (!historyNextCursor.before) { return; }
+    historyPageIndex += 1;
+    historyCursors[historyPageIndex] = { before: historyNextCursor.before, beforeId: historyNextCursor.beforeId };
+    loadHistory(false);
+});
 $('history-export-btn').addEventListener('click', function () {
     window.open('/api/dashboard/alerts/export?' + historyParams().toString(), '_blank');
 });

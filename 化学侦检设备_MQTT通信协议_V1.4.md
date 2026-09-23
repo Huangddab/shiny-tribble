@@ -7,13 +7,13 @@
 Telemetry:
 
 ``` text
-/chem/telemetry/{device_id}
+chem/telemetry/{device_id}
 ```
 
 Events:
 
 ``` text
-/chem/events/{device_id}
+chem/events/{device_id}
 ```
 
 ### 下行 Notify
@@ -21,13 +21,13 @@ Events:
 全设备：
 
 ``` text
-/chem/notify
+chem/notify
 ```
 
 单设备：
 
 ``` text
-/chem/{device_id}/notify
+chem/{device_id}/notify
 ```
 
 ------------------------------------------------------------------------
@@ -303,14 +303,9 @@ Topic：
 {
 "type":0,
 "timestamp":1789720300,
-"message":1
+"message":"请注意"
 }
 ```
-
-message: 字段定义
-1:警报
-2:正常
-3:撤离
 
 ------------------------------------------------------------------------
 
@@ -325,7 +320,7 @@ message: 字段定义
 }
 ```
 
-当前只定义协议，不定义具体参数。
+当前只定义协议，不定义具体参数。暂时不用后期可以添加预置位等设置。
 
 ------------------------------------------------------------------------
 

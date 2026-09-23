@@ -16,6 +16,101 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+func RequireAdmin() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if role, exists := c.Get("role"); !exists || role != "admin" {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "administrator access required"})
+			return
+		}
+		c.Next()
+	}
+}
+
+func UserList() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if database.GetDatabase() == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "database not initialized"})
+			return
+		}
+		var users []model.User
+		if err := database.FindAll("users", bson.M{}, &users); err != nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "failed to load users"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"items": users})
+	}
+}
+
+func UserCreate() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if database.GetDatabase() == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "database not initialized"})
+			return
+		}
+		var request struct {
+			Username string `json:"username" binding:"required"`
+			Password string `json:"password" binding:"required"`
+			Email    string `json:"email"`
+			Role     string `json:"role"`
+		}
+		if err := c.ShouldBindJSON(&request); err != nil || strings.TrimSpace(request.Username) == "" || len(request.Password) < 6 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "username is required and password must contain at least 6 characters"})
+			return
+		}
+		request.Username = strings.TrimSpace(request.Username)
+		request.Role = strings.TrimSpace(request.Role)
+		if request.Role == "" {
+			request.Role = "user"
+		}
+		if request.Role != "admin" && request.Role != "user" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "role must be admin or user"})
+			return
+		}
+		if database.FindOne("users", bson.M{"username": request.Username}).Err() == nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "username already exists"})
+			return
+		}
+		hashed, err := bcrypt.GenerateFromPassword([]byte(request.Password), bcrypt.DefaultCost)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to secure password"})
+			return
+		}
+		now := time.Now()
+		user := model.User{Username: request.Username, Password: string(hashed), Email: strings.TrimSpace(request.Email), Role: request.Role, CreatedAt: now, UpdatedAt: now}
+		if _, err := database.InsertOne("users", user); err != nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "failed to create user"})
+			return
+		}
+		user.Password = ""
+		c.JSON(http.StatusCreated, user)
+	}
+}
+
+func UserDelete() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if database.GetDatabase() == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "database not initialized"})
+			return
+		}
+		username := c.Param("username")
+		actor, _ := c.Get("username")
+		if username == actor {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "cannot delete current user"})
+			return
+		}
+		result, err := database.DeleteOne("users", bson.M{"username": username})
+		if err != nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "failed to delete user"})
+			return
+		}
+		if result.DeletedCount == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+		c.Status(http.StatusNoContent)
+	}
+}
+
 type authClaims struct {
 	Username string `json:"username"`
 	Role     string `json:"role"`

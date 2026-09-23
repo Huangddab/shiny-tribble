@@ -101,6 +101,39 @@ func persistDevice(device model.DashboardDevice) {
 	}
 }
 
+type deviceRecord struct {
+	ID    string `bson:"_id"`
+	Name  string `bson:"name"`
+	Group string `bson:"group"`
+	Mode  string `bson:"mode"`
+}
+
+func loadDeviceRegistry() ([]model.DashboardDevice, error) {
+	if database.GetDatabase() == nil {
+		return nil, errors.New("database not initialized")
+	}
+	var records []deviceRecord
+	if err := database.FindAll("dashboard_devices", bson.M{}, &records, options.Find().SetSort(bson.D{{Key: "_id", Value: 1}})); err != nil {
+		return nil, err
+	}
+	devices := make([]model.DashboardDevice, 0, len(records))
+	for _, record := range records {
+		if record.ID == "" {
+			continue
+		}
+		group := record.Group
+		if group == "" {
+			group = "未分组"
+		}
+		name := record.Name
+		if name == "" {
+			name = "设备 " + record.ID
+		}
+		devices = append(devices, model.DashboardDevice{ID: record.ID, Name: name, Group: group, Mode: record.Mode, Status: "offline"})
+	}
+	return devices, nil
+}
+
 func persistTelemetrySample(sample model.DashboardTelemetrySample) {
 	persistDocument("dashboard_telemetry_samples", sample)
 }

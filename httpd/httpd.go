@@ -101,4 +101,7 @@ func (s *HttpdService) initHandle() {
 	dashboardRouter.POST("/alerts/:alert_id/confirm", router.ConfirmAlert(s.dashboard))
 	dashboardRouter.GET("/alerts/history", router.AlertHistory(s.dashboard))
 	dashboardRouter.GET("/alerts/export", router.ExportAlertHistory(s.dashboard))
+	dashboardRouter.GET("/users", router.RequireAdmin(), router.UserList())
+	dashboardRouter.POST("/users", router.RequireAdmin(), router.UserCreate())
+	dashboardRouter.DELETE("/users/:username", router.RequireAdmin(), router.UserDelete())
 }
