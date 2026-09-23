@@ -90,6 +90,10 @@ type DashboardTraining struct {
 type DashboardPollutionSource struct {
 	Substance string  `json:"substance"`
 	Conc      float64 `json:"conc"`
+	Lat       float64 `json:"lat"`
+	Lng       float64 `json:"lng"`
+	Radius    float64 `json:"radius"`
+	Speed     float64 `json:"speed"`
 }
 
 type DashboardTelemetrySample struct {

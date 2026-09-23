@@ -109,6 +109,7 @@ func (s *HttpdService) initHandle() {
 	dashboardRouter.POST("/groups/:group/commands", router.DashboardGroupCommand(s.dashboard))
 	dashboardRouter.POST("/groups/:group/trainings", router.StartTraining(s.dashboard))
 	dashboardRouter.POST("/trainings/:training_id/end", router.EndTraining(s.dashboard))
+	dashboardRouter.POST("/trainings/:training_id/source", router.UpdateTrainingSource(s.dashboard))
 	dashboardRouter.GET("/trainings/history", router.TrainingHistory(s.dashboard))
 	dashboardRouter.GET("/commands/history", router.CommandHistory(s.dashboard))
 	dashboardRouter.GET("/telemetry/history", router.TelemetryHistory(s.dashboard))

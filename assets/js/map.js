@@ -1,5 +1,15 @@
 var map = L.map('map-container', { minZoom: 14, maxZoom: 18, zoomControl: false }).setView([22.6335, 113.9035], 17);
 var markers = L.layerGroup().addTo(map);
+var trainingSourceMarker = null;
+function setTrainingSourcePosition(lat, lng) {
+    $('training-lat').value = lat.toFixed(6);
+    $('training-lng').value = lng.toFixed(6);
+    if (trainingSourceMarker) { map.removeLayer(trainingSourceMarker); }
+    trainingSourceMarker = L.marker([lat, lng]).bindPopup('模拟污染源').addTo(map);
+}
+map.on('click', function (e) {
+    if ($('training-source-toggle').checked) { setTrainingSourcePosition(e.latlng.lat, e.latlng.lng); }
+});
 var markerViewKey = '';
 var refreshTimer = null;
 var authRequired = false;
@@ -167,13 +177,24 @@ function renderTrainings(trainings) {
 }
 
 function renderActiveTrainings(trainings) {
+    // Snapshot polling must not replace an edit form while the operator types.
+    if ($('active-training-list').contains(document.activeElement) &&
+        document.activeElement.closest('form[data-source-training]')) { return; }
     var active = (trainings || []).filter(function (training) { return training.status !== 'ended'; });
     $('active-training-list').innerHTML = active.length ? active.map(function (training) {
         var statusText = { starting: '启动中', active: '进行中' }[training.status] || training.status;
         return '<div class="training-item training-item-' + escapeHtml(training.status) + '">' +
             '<div class="training-item-head"><strong>' + escapeHtml(training.name) + '</strong><span class="training-state training-' + escapeHtml(training.status) + '">' + statusText + '</span></div>' +
             '<div class="training-item-meta"><span><i>编队</i>' + escapeHtml(training.group) + '</span><span><i>设备</i>' + training.devices.length + ' 台</span></div>' +
-            '<div class="training-item-foot"><time>' + escapeHtml(training.started_at) + '</time><button type="button" class="btn btn-sm btn-danger" data-training-id="' + escapeHtml(training.id) + '">结束训练</button></div></div>';
+            '<div class="training-item-foot"><time>' + escapeHtml(training.started_at) + '</time><button type="button" class="btn btn-sm btn-danger" data-training-id="' + escapeHtml(training.id) + '">结束训练</button></div>' +
+            (training.source ? '<form class="training-source-edit" data-source-training="' + escapeHtml(training.id) + '">' +
+                '<div class="form-row"><label>物质<input name="substance" value="' + escapeHtml(training.source.substance) + '" required></label>' +
+                '<label>源点浓度 ppm<input name="conc" type="number" step="any" min="0.01" value="' + training.source.conc + '" required></label>' +
+                '<label>纬度<input name="lat" type="number" step="any" value="' + training.source.lat + '" required></label>' +
+                '<label>经度<input name="lng" type="number" step="any" value="' + training.source.lng + '" required></label>' +
+                '<label>最大半径 m<input name="radius" type="number" step="any" min="0.01" value="' + training.source.radius + '" required></label>' +
+                '<label>速度 m/s<input name="speed" type="number" step="any" min="0.01" value="' + training.source.speed + '" required></label></div>' +
+                '<button type="submit" class="btn btn-sm btn-primary">更新污染源</button></form>' : '') + '</div>';
     }).join('') : '<div class="empty-state">当前没有进行中的训练</div>';
 }
 
@@ -594,7 +615,10 @@ renderTypeFields('single-fields', $('single-type').value);
 $('single-type').addEventListener('change', function () { renderTypeFields('single-fields', this.value); });
 renderTypeFields('group-fields', $('group-type').value);
 $('group-type').addEventListener('change', function () { renderTypeFields('group-fields', this.value); });
-$('training-source-toggle').addEventListener('change', function () { $('training-source-fields').hidden = !this.checked; });
+$('training-source-toggle').addEventListener('change', function () {
+    $('training-source-fields').hidden = !this.checked;
+    $('training-location-hint').hidden = !this.checked;
+});
 
 /* ---------- command center: form submissions ---------- */
 
@@ -644,8 +668,15 @@ $('training-start-form').addEventListener('submit', function (e) {
     if ($('training-source-toggle').checked) {
         body.source = {
             substance: $('training-substance').value.trim(),
-            conc: parseFloat($('training-conc').value)
+            conc: parseFloat($('training-conc').value),
+            lat: parseFloat($('training-lat').value),
+            lng: parseFloat($('training-lng').value),
+            radius: parseFloat($('training-radius').value),
+            speed: parseFloat($('training-speed').value)
         };
+        if (!body.source.substance || ![body.source.conc, body.source.lat, body.source.lng, body.source.radius, body.source.speed].every(Number.isFinite)) {
+            feedback.textContent = '请填写污染源、地图位置、最大半径和扩散速度'; feedback.className = 'feedback error'; return;
+        }
     }
     feedback.textContent = '启动中…'; feedback.className = 'feedback';
     apiRequest('POST', '/api/dashboard/groups/' + encodeURIComponent(group) + '/trainings', body).then(function () {
@@ -653,11 +684,25 @@ $('training-start-form').addEventListener('submit', function (e) {
         toast('训练已启动');
         $('training-start-form').reset();
         $('training-source-fields').hidden = true;
+        $('training-location-hint').hidden = true;
+        if (trainingSourceMarker) { map.removeLayer(trainingSourceMarker); trainingSourceMarker = null; }
         refresh();
     }).catch(function (err) {
         feedback.textContent = err.message; feedback.className = 'feedback error';
         toast(err.message, true);
     });
+});
+
+$('active-training-list').addEventListener('submit', function (e) {
+    var form = e.target.closest('form[data-source-training]');
+    if (!form) { return; }
+    e.preventDefault();
+    var data = new FormData(form);
+    var source = { substance: String(data.get('substance')).trim() };
+    ['conc', 'lat', 'lng', 'radius', 'speed'].forEach(function (key) { source[key] = Number(data.get(key)); });
+    apiRequest('POST', '/api/dashboard/trainings/' + encodeURIComponent(form.dataset.sourceTraining) + '/source', source)
+        .then(function () { toast('污染源参数已更新'); refresh(); })
+        .catch(function (err) { toast(err.message, true); });
 });
 
 $('active-training-list').addEventListener('click', function (e) {

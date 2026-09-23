@@ -31,6 +31,8 @@ type Store struct {
 	commandTargets    map[string]map[string]struct{}
 	trainings         map[string]*model.DashboardTraining
 	trainingCommands  map[string]string
+	trainingStarted   map[string]time.Time
+	sourceSent        map[string]sourceDelivery
 	samples           []model.DashboardTelemetrySample
 	lastSampleAt      map[string]int64
 	lastPositionShare map[string]int64
@@ -132,6 +134,8 @@ func NewStore() *Store {
 	} else if database.GetDatabase() != nil {
 		logrus.Warnf("load dashboard training history failed: %v", err)
 	}
+	store.trainingStarted = make(map[string]time.Time)
+	store.sourceSent = make(map[string]sourceDelivery)
 	return store
 }
 
@@ -276,8 +280,8 @@ func (store *Store) StartTraining(group, name string) (model.DashboardTraining, 
 }
 
 func (store *Store) StartTrainingWithSource(group, name string, source *model.DashboardPollutionSource) (model.DashboardTraining, error) {
-	if source != nil && (strings.TrimSpace(source.Substance) == "" || source.Conc <= 0) {
-		return model.DashboardTraining{}, fmt.Errorf("pollution source requires substance and positive conc")
+	if err := validateTrainingSource(source); err != nil {
+		return model.DashboardTraining{}, err
 	}
 	store.mu.RLock()
 	devices := make([]string, 0)
@@ -294,12 +298,6 @@ func (store *Store) StartTrainingWithSource(group, name string, source *model.Da
 	if err != nil {
 		return model.DashboardTraining{}, err
 	}
-	// 模式切换是训练能否开始的必要条件；污染源配置下发失败不阻断训练，只记录告警
-	if source != nil {
-		if _, err := store.SendGroupNotify(group, 1, map[string]any{"action": "pollution_source", "substance": source.Substance, "conc": source.Conc}); err != nil {
-			logrus.Warnf("send pollution source config to group %s failed: %v", group, err)
-		}
-	}
 	id, err := uuid.NewV7()
 	if err != nil {
 		return model.DashboardTraining{}, err
@@ -307,6 +305,7 @@ func (store *Store) StartTrainingWithSource(group, name string, source *model.Da
 	training := model.DashboardTraining{ID: id.String(), Name: name, Group: group, Devices: devices, Mode: "training", Status: "starting", StartedAt: time.Now().Format("15:04:05"), Source: source}
 	store.mu.Lock()
 	store.trainings[training.ID] = &training
+	store.trainingStarted[training.ID] = time.Now()
 	if commandID != "" {
 		store.trainingCommands[commandID] = training.ID
 	}
@@ -335,6 +334,7 @@ func (store *Store) resolveTrainingCommandLocked(commandID, result string) {
 	} else {
 		training.Status = "ended"
 		training.EndedAt = time.Now().Format("15:04:05")
+		delete(store.trainingStarted, training.ID)
 	}
 	persisted := *training
 	go persistTraining(persisted)
@@ -363,6 +363,10 @@ func (store *Store) EndTraining(trainingID string) (model.DashboardTraining, err
 	training.Mode = "monitor"
 	training.Status = "ended"
 	training.EndedAt = time.Now().Format("15:04:05")
+	delete(store.trainingStarted, training.ID)
+	for _, deviceID := range training.Devices {
+		delete(store.sourceSent, training.ID+":"+deviceID)
+	}
 	result := *training
 	store.mu.Unlock()
 	go persistTraining(result)
@@ -922,8 +926,16 @@ func (store *Store) RunMaintenance(ctx context.Context, interval time.Duration) 
 			store.mu.Lock()
 			store.expireLocked(now)
 			shares := store.collectPositionSharesLocked(now)
+			for id, training := range store.trainings {
+				if training.Status == "active" && training.Source != nil && store.trainingStarted[id].IsZero() {
+					store.trainingStarted[id] = now
+				}
+			}
 			store.mu.Unlock()
 			store.publishPositionShares(shares)
+			if now.Unix()%5 == 0 {
+				store.updateTrainingSources(now)
+			}
 		}
 	}
 }

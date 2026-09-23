@@ -260,7 +260,12 @@
                                 <label>模拟物质<input type="text" id="training-substance" placeholder="DMMP"></label>
                                 <label>模拟浓度 ppm<input type="number" step="any" id="training-conc"
                                         placeholder="5"></label>
+                                <label>源点纬度<input type="number" step="any" id="training-lat" placeholder="在地图上点击选择"></label>
+                                <label>源点经度<input type="number" step="any" id="training-lng" placeholder="在地图上点击选择"></label>
+                                <label>最大扩散半径 m<input type="number" step="any" min="0.01" id="training-radius" placeholder="200"></label>
+                                <label>扩散速度 m/s<input type="number" step="any" min="0.01" id="training-speed" placeholder="2"></label>
                             </div>
+                            <div id="training-location-hint" class="feedback" hidden>请在地图上点击设置污染源位置，也可手动填写经纬度。</div>
                             <div class="form-actions"><button type="submit" class="btn btn-primary">开始训练</button><span
                                     class="feedback" id="training-feedback"></span></div>
                         </form>
