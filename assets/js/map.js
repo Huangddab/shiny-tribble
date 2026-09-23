@@ -1,15 +1,61 @@
 var map = L.map('map-container', { minZoom: 14, maxZoom: 18, zoomControl: false }).setView([22.6335, 113.9035], 17);
 var markers = L.layerGroup().addTo(map);
+var trainingLocationMap = null;
 var trainingSourceMarker = null;
+var trainingSourceRadius = null;
+var trainingDeviceMarkers = null;
+var trainingDevices = [];
+
+function ensureTrainingLocationMap() {
+    if (trainingLocationMap) { return; }
+    trainingLocationMap = L.map('training-location-map', { minZoom: 14, maxZoom: 18 }).setView(map.getCenter(), map.getZoom());
+    L.tileLayer('http://localhost:8081/data/baoan/{z}/{x}/{y}.png', {
+        minZoom: 14, maxZoom: 18, maxNativeZoom: 18, attribution: ''
+    }).addTo(trainingLocationMap);
+    trainingDeviceMarkers = L.layerGroup().addTo(trainingLocationMap);
+    trainingLocationMap.on('click', function (e) { setTrainingSourcePosition(e.latlng.lat, e.latlng.lng); });
+    renderTrainingDeviceMarkers();
+}
+
+function renderTrainingDeviceMarkers() {
+    if (!trainingDeviceMarkers) { return; }
+    trainingDeviceMarkers.clearLayers();
+    var group = $('training-group').value;
+    trainingDevices.filter(function (device) {
+        return device.group === group && device.position_valid === true &&
+            Number.isFinite(Number(device.lat)) && Number.isFinite(Number(device.lng));
+    }).forEach(function (device) {
+        L.circleMarker([Number(device.lat), Number(device.lng)], {
+            radius: 5, color: '#46d9d2', fillOpacity: 0.85
+        }).bindTooltip(escapeHtml(device.name || device.id)).addTo(trainingDeviceMarkers);
+    });
+}
+
+function updateTrainingRadius() {
+    if (!trainingLocationMap || !trainingSourceMarker) { return; }
+    var radius = Number($('training-radius').value);
+    if (trainingSourceRadius) { trainingLocationMap.removeLayer(trainingSourceRadius); trainingSourceRadius = null; }
+    if (Number.isFinite(radius) && radius > 0) {
+        trainingSourceRadius = L.circle(trainingSourceMarker.getLatLng(), {
+            radius: radius, color: '#ffc857', fillColor: '#ffc857', fillOpacity: 0.12, weight: 2
+        }).addTo(trainingLocationMap);
+    }
+}
+
 function setTrainingSourcePosition(lat, lng) {
     $('training-lat').value = lat.toFixed(6);
     $('training-lng').value = lng.toFixed(6);
-    if (trainingSourceMarker) { map.removeLayer(trainingSourceMarker); }
-    trainingSourceMarker = L.marker([lat, lng]).bindPopup('模拟污染源').addTo(map);
+    ensureTrainingLocationMap();
+    if (trainingSourceMarker) { trainingLocationMap.removeLayer(trainingSourceMarker); }
+    trainingSourceMarker = L.marker([lat, lng], { draggable: true })
+        .bindPopup('模拟污染源').addTo(trainingLocationMap);
+    trainingSourceMarker.on('dragend', function () {
+        var position = trainingSourceMarker.getLatLng();
+        setTrainingSourcePosition(position.lat, position.lng);
+    });
+    $('training-location-hint').textContent = '已选择：' + lat.toFixed(6) + ', ' + lng.toFixed(6);
+    updateTrainingRadius();
 }
-map.on('click', function (e) {
-    if ($('training-source-toggle').checked) { setTrainingSourcePosition(e.latlng.lat, e.latlng.lng); }
-});
 var markerViewKey = '';
 var refreshTimer = null;
 var authRequired = false;
@@ -316,6 +362,8 @@ function fetchGroups() {
 }
 
 function renderSnapshot(snapshot) {
+    trainingDevices = snapshot.devices || [];
+    renderTrainingDeviceMarkers();
     setText('metric-total', snapshot.summary.total_devices); setText('metric-online', snapshot.summary.online_devices); setText('metric-alerts', snapshot.summary.alert_devices); setText('metric-offline', snapshot.summary.offline_devices); setText('metric-training', snapshot.summary.training_devices);
     setText('map-updated', '数据更新 ' + new Date(snapshot.updated_at).toLocaleTimeString('zh-CN', { hour12: false }));
     renderAlerts(snapshot.alerts || []);
@@ -348,6 +396,9 @@ document.querySelectorAll('.nav-btn').forEach(function (btn) {
         document.querySelectorAll('.page').forEach(function (p) { p.classList.toggle('active', p.id === 'page-' + btn.dataset.page); });
         if (btn.dataset.page === 'history' && !historyLoaded) { loadHistory(); }
         if (btn.dataset.page === 'settings') { loadUsers(); }
+        if (btn.dataset.page === 'training' && trainingLocationMap) {
+            setTimeout(function () { trainingLocationMap.invalidateSize(); }, 0);
+        }
     });
 });
 
@@ -617,7 +668,23 @@ renderTypeFields('group-fields', $('group-type').value);
 $('group-type').addEventListener('change', function () { renderTypeFields('group-fields', this.value); });
 $('training-source-toggle').addEventListener('change', function () {
     $('training-source-fields').hidden = !this.checked;
-    $('training-location-hint').hidden = !this.checked;
+    $('training-location-picker').hidden = !this.checked;
+    if (this.checked) {
+        ensureTrainingLocationMap();
+        setTimeout(function () { trainingLocationMap.invalidateSize(); }, 0);
+    }
+});
+$('training-group').addEventListener('change', renderTrainingDeviceMarkers);
+$('training-radius').addEventListener('input', updateTrainingRadius);
+['training-lat', 'training-lng'].forEach(function (id) {
+    $(id).addEventListener('change', function () {
+        var lat = Number($('training-lat').value), lng = Number($('training-lng').value);
+        if ($('training-lat').value !== '' && $('training-lng').value !== '' &&
+            Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) {
+            setTrainingSourcePosition(lat, lng);
+            trainingLocationMap.panTo([lat, lng]);
+        }
+    });
 });
 
 /* ---------- command center: form submissions ---------- */
@@ -684,8 +751,10 @@ $('training-start-form').addEventListener('submit', function (e) {
         toast('训练已启动');
         $('training-start-form').reset();
         $('training-source-fields').hidden = true;
-        $('training-location-hint').hidden = true;
-        if (trainingSourceMarker) { map.removeLayer(trainingSourceMarker); trainingSourceMarker = null; }
+        $('training-location-picker').hidden = true;
+        if (trainingSourceMarker) { trainingLocationMap.removeLayer(trainingSourceMarker); trainingSourceMarker = null; }
+        if (trainingSourceRadius) { trainingLocationMap.removeLayer(trainingSourceRadius); trainingSourceRadius = null; }
+        $('training-location-hint').textContent = '尚未选择污染源位置';
         refresh();
     }).catch(function (err) {
         feedback.textContent = err.message; feedback.className = 'feedback error';
