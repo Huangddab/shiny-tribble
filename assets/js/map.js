@@ -226,21 +226,39 @@ function renderActiveTrainings(trainings) {
     // Snapshot polling must not replace an edit form while the operator types.
     if ($('active-training-list').contains(document.activeElement) &&
         document.activeElement.closest('form[data-source-training]')) { return; }
+    var openEditors = new Set(Array.from($('active-training-list').querySelectorAll('form[data-source-training]:not([hidden])'))
+        .map(function (form) { return form.dataset.sourceTraining; }));
     var active = (trainings || []).filter(function (training) { return training.status !== 'ended'; });
     $('active-training-list').innerHTML = active.length ? active.map(function (training) {
         var statusText = { starting: '启动中', active: '进行中' }[training.status] || training.status;
-        return '<div class="training-item training-item-' + escapeHtml(training.status) + '">' +
-            '<div class="training-item-head"><strong>' + escapeHtml(training.name) + '</strong><span class="training-state training-' + escapeHtml(training.status) + '">' + statusText + '</span></div>' +
-            '<div class="training-item-meta"><span><i>编队</i>' + escapeHtml(training.group) + '</span><span><i>设备</i>' + training.devices.length + ' 台</span></div>' +
-            '<div class="training-item-foot"><time>' + escapeHtml(training.started_at) + '</time><button type="button" class="btn btn-sm btn-danger" data-training-id="' + escapeHtml(training.id) + '">结束训练</button></div>' +
-            (training.source ? '<form class="training-source-edit" data-source-training="' + escapeHtml(training.id) + '">' +
+        var id = escapeHtml(training.id);
+        var source = training.source;
+        var sourceSummary = source
+            ? '<div class="active-training-source"><div class="active-training-source-title"><span>模拟污染源</span><b>' + escapeHtml(source.substance) + '</b></div>' +
+                '<div class="active-training-metrics"><span><small>源点浓度</small><strong>' + escapeHtml(source.conc) + ' <em>ppm</em></strong></span>' +
+                '<span><small>最大半径</small><strong>' + escapeHtml(source.radius) + ' <em>m</em></strong></span>' +
+                '<span><small>扩散速度</small><strong>' + escapeHtml(source.speed) + ' <em>m/s</em></strong></span></div>' +
+                '<div class="active-training-coordinates">源点坐标　' + escapeHtml(source.lat) + ', ' + escapeHtml(source.lng) + '</div></div>'
+            : '<div class="active-training-no-source">未配置模拟污染源</div>';
+        return '<div class="training-item active-training-card training-item-' + escapeHtml(training.status) + '">' +
+            '<div class="training-item-head"><div class="active-training-title"><span class="active-training-label">TRAINING SESSION</span><strong>' + escapeHtml(training.name) + '</strong></div>' +
+                '<span class="training-state training-' + escapeHtml(training.status) + '"><i class="active-training-indicator"></i>' + statusText + '</span></div>' +
+            '<div class="active-training-details"><span><small>参训编队</small><b>' + escapeHtml(training.group) + '</b></span>' +
+                '<span><small>参训设备</small><b>' + (training.devices || []).length + ' 台</b></span>' +
+                '<span><small>开始时间</small><b>' + escapeHtml(training.started_at) + '</b></span></div>' +
+            sourceSummary +
+            '<div class="active-training-actions">' +
+                (source ? '<button type="button" class="btn btn-sm active-training-edit-btn" data-source-toggle="' + id +
+                    '" aria-expanded="' + (openEditors.has(training.id) ? 'true' : 'false') + '">调整污染源</button>' : '') +
+                '<button type="button" class="btn btn-sm btn-danger" data-training-id="' + id + '">结束训练</button></div>' +
+            (source ? '<form class="training-source-edit" data-source-training="' + id + '"' + (openEditors.has(training.id) ? '' : ' hidden') + '>' +
                 '<div class="form-row"><label>物质<input name="substance" value="' + escapeHtml(training.source.substance) + '" required></label>' +
                 '<label>源点浓度 ppm<input name="conc" type="number" step="any" min="0.01" value="' + training.source.conc + '" required></label>' +
                 '<label>纬度<input name="lat" type="number" step="any" value="' + training.source.lat + '" required></label>' +
                 '<label>经度<input name="lng" type="number" step="any" value="' + training.source.lng + '" required></label>' +
                 '<label>最大半径 m<input name="radius" type="number" step="any" min="0.01" value="' + training.source.radius + '" required></label>' +
                 '<label>速度 m/s<input name="speed" type="number" step="any" min="0.01" value="' + training.source.speed + '" required></label></div>' +
-                '<button type="submit" class="btn btn-sm btn-primary">更新污染源</button></form>' : '') + '</div>';
+                '<button type="submit" class="btn btn-sm btn-primary">保存调整</button></form>' : '') + '</div>';
     }).join('') : '<div class="empty-state">当前没有进行中的训练</div>';
 }
 
@@ -775,6 +793,16 @@ $('active-training-list').addEventListener('submit', function (e) {
 });
 
 $('active-training-list').addEventListener('click', function (e) {
+    var toggle = e.target.closest('button[data-source-toggle]');
+    if (toggle) {
+        var editor = Array.from($('active-training-list').querySelectorAll('form[data-source-training]'))
+            .find(function (form) { return form.dataset.sourceTraining === toggle.dataset.sourceToggle; });
+        if (editor) {
+            editor.hidden = !editor.hidden;
+            toggle.setAttribute('aria-expanded', String(!editor.hidden));
+        }
+        return;
+    }
     var btn = e.target.closest('button[data-training-id]');
     if (!btn) { return; }
     apiRequest('POST', '/api/dashboard/trainings/' + encodeURIComponent(btn.dataset.trainingId) + '/end').then(function () {
