@@ -43,3 +43,22 @@ func TestValidateTrainingSource(t *testing.T) {
 		t.Fatal("infinite speed must be rejected")
 	}
 }
+
+func TestGCJ02SourceMatchesWGS84Device(t *testing.T) {
+	lat, lng := 22.6335, 113.9035
+	mapLat, mapLng := wgs84ToGCJ02(lat, lng)
+	if math.Abs(mapLat-lat) < 0.001 || math.Abs(mapLng-lng) < 0.001 {
+		t.Fatal("expected a meaningful map offset for mainland GPS coordinates")
+	}
+	source := model.DashboardPollutionSource{Conc: 5, Lat: mapLat, Lng: mapLng, Radius: 100, Speed: 10}
+	if got := simulatedConcentration(source, lat, lng, 10*time.Second); got != 5 {
+		t.Fatalf("device at the map source must receive full concentration, got %v", got)
+	}
+	if got := simulatedConcentration(source, lat+0.002, lng, 10*time.Second); got != 0 {
+		t.Fatalf("device outside radius must receive zero, got %v", got)
+	}
+	outsideLat, outsideLng := wgs84ToGCJ02(35.6895, 139.6917)
+	if outsideLat != 35.6895 || outsideLng != 139.6917 {
+		t.Fatal("coordinates outside mainland China must remain unchanged")
+	}
+}
