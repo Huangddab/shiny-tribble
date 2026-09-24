@@ -6,6 +6,27 @@ var trainingSourceRadius = null;
 var trainingDeviceMarkers = null;
 var trainingDevices = [];
 
+// GNSS is WGS84; the offline Amap tiles and map clicks use GCJ-02.
+// Preserve the raw GPS coordinates in the API and convert only for display.
+function wgs84ToGcj02(lat, lng) {
+    lat = Number(lat); lng = Number(lng);
+    if (lng < 72.004 || lng > 137.8347 || lat < 0.8293 || lat > 55.8271) { return [lat, lng]; }
+    var x = lng - 105, y = lat - 35, pi = Math.PI;
+    var dLat = -100 + 2 * x + 3 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * Math.sqrt(Math.abs(x));
+    dLat += (20 * Math.sin(6 * x * pi) + 20 * Math.sin(2 * x * pi)) * 2 / 3;
+    dLat += (20 * Math.sin(y * pi) + 40 * Math.sin(y / 3 * pi)) * 2 / 3;
+    dLat += (160 * Math.sin(y / 12 * pi) + 320 * Math.sin(y * pi / 30)) * 2 / 3;
+    var dLng = 300 + x + 2 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * Math.sqrt(Math.abs(x));
+    dLng += (20 * Math.sin(6 * x * pi) + 20 * Math.sin(2 * x * pi)) * 2 / 3;
+    dLng += (20 * Math.sin(x * pi) + 40 * Math.sin(x / 3 * pi)) * 2 / 3;
+    dLng += (150 * Math.sin(x / 12 * pi) + 300 * Math.sin(x / 30 * pi)) * 2 / 3;
+    var a = 6378245, ee = 0.006693421622965943;
+    var radLat = lat * pi / 180, magic = 1 - ee * Math.sin(radLat) * Math.sin(radLat), sqrtMagic = Math.sqrt(magic);
+    dLat = dLat * 180 / ((a * (1 - ee) / (magic * sqrtMagic)) * pi);
+    dLng = dLng * 180 / ((a / sqrtMagic * Math.cos(radLat)) * pi);
+    return [lat + dLat, lng + dLng];
+}
+
 function ensureTrainingLocationMap() {
     if (trainingLocationMap) { return; }
     trainingLocationMap = L.map('training-location-map', { minZoom: 14, maxZoom: 18 }).setView(map.getCenter(), map.getZoom());
@@ -25,7 +46,7 @@ function renderTrainingDeviceMarkers() {
         return device.group === group && device.position_valid === true &&
             Number.isFinite(Number(device.lat)) && Number.isFinite(Number(device.lng));
     }).forEach(function (device) {
-        L.circleMarker([Number(device.lat), Number(device.lng)], {
+        L.circleMarker(wgs84ToGcj02(device.lat, device.lng), {
             radius: 5, color: '#46d9d2', fillOpacity: 0.85
         }).bindTooltip(escapeHtml(device.name || device.id)).addTo(trainingDeviceMarkers);
     });
@@ -270,11 +291,11 @@ function renderMarkers(devices) {
     });
     visibleDevices.forEach(function (device) {
         var icon = L.divIcon({ className: '', html: '<div class="marker-wrap"><div class="device-marker ' + device.status + '"></div><span>' + escapeHtml(device.name || device.id) + '</span></div>', iconSize: [120, 38], iconAnchor: [10, 19] });
-        L.marker([Number(device.lat), Number(device.lng)], { icon: icon }).bindPopup('<strong>' + escapeHtml(device.name) + '</strong><br>编号：' + escapeHtml(device.id) + '<br>编队：' + escapeHtml(device.group || '未分组') + '<br>状态：' + ({normal:'正常',alert:'报警',offline:'离线'}[device.status] || device.status) + '<br>物质：' + escapeHtml(device.substance || '—') + '<br>浓度：' + device.conc.toFixed(1) + ' ppm<br>电量：' + device.battery + '%<br>RSSI：' + device.rssi + ' dBm').addTo(markers);
+        L.marker(wgs84ToGcj02(device.lat, device.lng), { icon: icon }).bindPopup('<strong>' + escapeHtml(device.name) + '</strong><br>编号：' + escapeHtml(device.id) + '<br>编队：' + escapeHtml(device.group || '未分组') + '<br>状态：' + ({normal:'正常',alert:'报警',offline:'离线'}[device.status] || device.status) + '<br>物质：' + escapeHtml(device.substance || '—') + '<br>浓度：' + device.conc.toFixed(1) + ' ppm<br>电量：' + device.battery + '%<br>RSSI：' + device.rssi + ' dBm').addTo(markers);
     });
     var viewKey = visibleDevices.map(function (device) { return device.id + ':' + device.lat + ',' + device.lng; }).sort().join('|');
     if (viewKey && viewKey !== markerViewKey) {
-        var bounds = L.latLngBounds(visibleDevices.map(function (device) { return [Number(device.lat), Number(device.lng)]; }));
+        var bounds = L.latLngBounds(visibleDevices.map(function (device) { return wgs84ToGcj02(device.lat, device.lng); }));
         map.fitBounds(bounds, { padding: [24, 24], maxZoom: 17 });
     }
     markerViewKey = viewKey;

@@ -54,7 +54,9 @@ func simulatedConcentration(source model.DashboardPollutionSource, lat, lng floa
 	if radius <= 0 {
 		return 0
 	}
-	distance := sourceDistance(source.Lat, source.Lng, lat, lng)
+	// Source is picked on the GCJ-02 map; device GNSS is WGS84.
+	mapLat, mapLng := wgs84ToGCJ02(lat, lng)
+	distance := sourceDistance(source.Lat, source.Lng, mapLat, mapLng)
 	if distance >= radius {
 		return 0
 	}
