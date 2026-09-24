@@ -20,8 +20,16 @@ func TestSimulatedConcentrationByDistanceAndTime(t *testing.T) {
 	if got := simulatedConcentration(source, 0.0009, 0, 5*time.Second); got != 0 {
 		t.Fatalf("outside current radius: got %v", got)
 	}
-	if got := simulatedConcentration(source, 0.0009, 0, 20*time.Second); math.Abs(got-1.25) > 0.03 {
+	if got := simulatedConcentration(source, 0.0009, 0, 20*time.Second); got <= 0 || got >= source.Conc {
 		t.Fatalf("at half maximum radius: got %v", got)
+	}
+	first := simulatedConcentration(source, 0, 0, 20*time.Second)
+	later := simulatedConcentration(source, 0, 0, 30*time.Second)
+	if math.Abs(first-later) < 0.01 {
+		t.Fatalf("concentration should fluctuate over time: %v then %v", first, later)
+	}
+	if sourceWave(0, 0) != 1 || math.Abs(sourceWave(20*time.Second, 0)-sourceWave(30*time.Second, 0)) < 0.01 {
+		t.Fatal("source wave must start at the configured concentration and evolve without GNSS")
 	}
 }
 
