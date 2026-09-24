@@ -59,7 +59,15 @@ func simulatedConcentration(source model.DashboardPollutionSource, lat, lng floa
 		return 0
 	}
 	factor := 1 - distance/radius
-	return math.Round(source.Conc*factor*factor*100) / 100
+	return math.Round(source.Conc*factor*factor*sourceWave(elapsed, distance)*100) / 100
+}
+
+// Two smooth waves produce repeatable fluctuations. Distance shifts the phase,
+// so positioned devices do not all change at the same moment.
+func sourceWave(elapsed time.Duration, distance float64) float64 {
+	seconds := elapsed.Seconds()
+	return 1 + 0.08*math.Sin(seconds/7+distance/60) +
+		0.03*math.Sin(seconds/3.1+distance/37)
 }
 
 // UpdateTrainingSource changes the exercise parameters; the next tick delivers
@@ -98,10 +106,17 @@ func (store *Store) updateTrainingSources(now time.Time) {
 		}
 		for _, deviceID := range training.Devices {
 			device := store.devices[deviceID]
-			if device == nil || !device.device.PositionValid || now.Sub(device.lastSeen) >= 15*time.Second {
+			if device == nil || now.Sub(device.lastSeen) >= 15*time.Second {
 				continue
 			}
-			conc := simulatedConcentration(*training.Source, device.device.Lat, device.device.Lng, now.Sub(started))
+			var conc float64
+			if device.device.PositionValid {
+				conc = simulatedConcentration(*training.Source, device.device.Lat, device.device.Lng, now.Sub(started))
+			} else {
+				// Until GNSS is available, keep the device in the exercise with
+				// a time-varying source value; distance attenuation needs GNSS.
+				conc = math.Round(training.Source.Conc*sourceWave(now.Sub(started), 0)*100) / 100
+			}
 			key := id + ":" + deviceID
 			previous, sent := store.sourceSent[key]
 			if conc == 0 && (!sent || previous.conc == 0) {
