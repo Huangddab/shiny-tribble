@@ -1100,7 +1100,7 @@ tbody tr:hover {
 .command-list,
 .training-list {
     padding: 0 19px 19px;
-    max-height: 320px;
+    max-height: 100%;
     overflow: auto;
 }
 
@@ -1351,8 +1351,8 @@ tbody tr:hover {
     gap: 8px;
 }
 
-.active-training-details > span,
-.active-training-metrics > span {
+.active-training-details>span,
+.active-training-metrics>span {
     display: flex;
     min-width: 0;
     flex-direction: column;
@@ -1472,11 +1472,12 @@ tbody tr:hover {
     outline: 2px solid rgba(25, 212, 255, .18);
 }
 
-.active-training-card .training-source-edit > button {
+.active-training-card .training-source-edit>button {
     align-self: flex-end;
 }
 
 @media (max-width: 600px) {
+
     .active-training-details,
     .active-training-metrics {
         grid-template-columns: repeat(2, minmax(0, 1fr));

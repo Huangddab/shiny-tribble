@@ -844,7 +844,7 @@ func (store *Store) applyTelemetry(deviceID string, envelope telemetryEnvelope) 
 	}
 	device.device.Status = "normal"
 	device.device.Mode = envelope.Message.Mode
-	if envelope.Message.GNSS.Fixed {
+	if envelope.Message.GNSS.Fixed == true || envelope.Message.GNSS.Lat != 0 {
 		device.device.Lat, device.device.Lng = envelope.Message.GNSS.Lat, envelope.Message.GNSS.Lng
 		device.device.PositionValid = true
 	}

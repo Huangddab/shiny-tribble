@@ -9,7 +9,7 @@ var trainingDevices = [];
 function ensureTrainingLocationMap() {
     if (trainingLocationMap) { return; }
     trainingLocationMap = L.map('training-location-map', { minZoom: 14, maxZoom: 18 }).setView(map.getCenter(), map.getZoom());
-    L.tileLayer('http://localhost:8081/data/baoan/{z}/{x}/{y}.png', {
+    L.tileLayer('http://192.168.5.98:8081/data/baoan/{z}/{x}/{y}.png', {
         minZoom: 14, maxZoom: 18, maxNativeZoom: 18, attribution: ''
     }).addTo(trainingLocationMap);
     trainingDeviceMarkers = L.layerGroup().addTo(trainingLocationMap);
@@ -60,7 +60,7 @@ var markerViewKey = '';
 var refreshTimer = null;
 var authRequired = false;
 
-L.tileLayer('http://localhost:8081/data/baoan/{z}/{x}/{y}.png', { minZoom: 14, maxZoom: 18, maxNativeZoom: 18, attribution: '' }).addTo(map);
+L.tileLayer('http://192.168.5.98:8081/data/baoan/{z}/{x}/{y}.png', { minZoom: 14, maxZoom: 18, maxNativeZoom: 18, attribution: '' }).addTo(map);
 
 function $(id) { return document.getElementById(id); }
 function setText(id, value) { $(id).textContent = value; }
