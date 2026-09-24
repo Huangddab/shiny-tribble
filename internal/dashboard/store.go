@@ -310,6 +310,21 @@ func (store *Store) StartTrainingWithSource(group, name string, source *model.Da
 		store.trainingCommands[commandID] = training.ID
 	}
 	store.mu.Unlock()
+	// Deliver the configured source immediately after requesting training mode.
+	// Subsequent per-device updates are handled by the diffusion tick.
+	if source != nil {
+		if _, err := store.SendGroupNotify(group, 1, map[string]any{
+			"action": "pollution_source", "substance": source.Substance, "conc": source.Conc,
+		}); err != nil {
+			logrus.Warnf("send initial pollution source to group %s failed: %v", group, err)
+		} else {
+			store.mu.Lock()
+			for _, deviceID := range devices {
+				store.sourceSent[training.ID+":"+deviceID] = sourceDelivery{conc: source.Conc, at: time.Now()}
+			}
+			store.mu.Unlock()
+		}
+	}
 	go persistTraining(training)
 	go persistAudit("system", "training.start", training.ID, "accepted", map[string]any{"group": group, "name": name})
 	return training, nil
@@ -335,6 +350,14 @@ func (store *Store) resolveTrainingCommandLocked(commandID, result string) {
 		training.Status = "ended"
 		training.EndedAt = time.Now().Format("15:04:05")
 		delete(store.trainingStarted, training.ID)
+		if training.Source != nil {
+			group := training.Group
+			go func() {
+				if _, err := store.SendGroupNotify(group, 1, map[string]any{"action": "pollution_source_clear"}); err != nil {
+					logrus.Warnf("clear source after training start failure for group %s: %v", group, err)
+				}
+			}()
+		}
 	}
 	persisted := *training
 	go persistTraining(persisted)
@@ -1002,6 +1025,7 @@ func (store *Store) expireLocked(now time.Time) {
 					}
 				}
 				updateCommandResult(command)
+				store.resolveTrainingCommandLocked(commandID, command.Result)
 				command.TimeoutAtUnix = now.Unix()
 				go persistCommand(cloneDashboardCommand(*command), now.Unix())
 			}
