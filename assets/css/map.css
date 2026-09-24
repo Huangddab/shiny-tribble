@@ -1296,6 +1296,193 @@ tbody tr:hover {
     color: var(--amber);
 }
 
+/* Active exercise cards keep operational data visible and editing secondary. */
+#active-training-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px;
+}
+
+#active-training-list .active-training-card {
+    gap: 14px;
+    padding: 17px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, rgba(20, 58, 69, .9), rgba(9, 27, 39, .95));
+}
+
+.active-training-title {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.active-training-label {
+    color: #79abb6;
+    font: 10px Consolas, monospace;
+    letter-spacing: 1.5px;
+}
+
+#active-training-list .training-item-head strong {
+    font-size: 17px;
+}
+
+#active-training-list .training-state {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 10px;
+    white-space: nowrap;
+}
+
+.active-training-indicator {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 9px currentColor;
+}
+
+.active-training-details,
+.active-training-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.active-training-details > span,
+.active-training-metrics > span {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.active-training-details small,
+.active-training-metrics small {
+    color: #88aab6;
+    font-size: 11px;
+}
+
+.active-training-details b {
+    overflow: hidden;
+    color: #eaf8fb;
+    font-size: 13px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.active-training-source {
+    padding: 12px;
+    border: 1px solid rgba(255, 200, 87, .25);
+    border-radius: 8px;
+    background: rgba(255, 200, 87, .055);
+}
+
+.active-training-source-title {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    color: #c8dce2;
+    font-size: 12px;
+}
+
+.active-training-source-title b {
+    color: var(--amber);
+    font-size: 15px;
+}
+
+.active-training-metrics strong {
+    color: #f4fbff;
+    font: 17px Consolas, monospace;
+}
+
+.active-training-metrics em {
+    color: #a9c6cd;
+    font-size: 11px;
+    font-style: normal;
+}
+
+.active-training-coordinates {
+    margin-top: 11px;
+    padding-top: 9px;
+    border-top: 1px solid rgba(255, 200, 87, .14);
+    color: #9cbbc3;
+    font: 11px Consolas, monospace;
+}
+
+.active-training-no-source {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.active-training-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(121, 171, 182, .2);
+}
+
+.active-training-edit-btn {
+    border-color: rgba(39, 227, 189, .35);
+    color: var(--green);
+}
+
+.active-training-card .training-source-edit {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid rgba(121, 171, 182, .25);
+    border-radius: 8px;
+    background: rgba(4, 18, 28, .6);
+}
+
+.active-training-card .training-source-edit[hidden] {
+    display: none;
+}
+
+.active-training-card .training-source-edit label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    color: #b5cdd6;
+    font-size: 12px;
+}
+
+.active-training-card .training-source-edit input {
+    min-width: 0;
+    min-height: 38px;
+    padding: 8px 10px;
+    border: 1px solid #315366;
+    border-radius: 4px;
+    background: #061724;
+    color: #eefaff;
+    font-family: inherit;
+    font-size: 13px;
+}
+
+.active-training-card .training-source-edit input:focus {
+    border-color: var(--blue);
+    outline: 2px solid rgba(25, 212, 255, .18);
+}
+
+.active-training-card .training-source-edit > button {
+    align-self: flex-end;
+}
+
+@media (max-width: 600px) {
+    .active-training-details,
+    .active-training-metrics {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
 .training-location-picker {
     border: 1px solid #315366;
     border-radius: 10px;
