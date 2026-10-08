@@ -202,7 +202,7 @@ function renderAlerts(alerts) {
     $('alert-list').innerHTML = alerts.length ? alerts.map(function (alert) {
         var subject = alert.substance || (alert.fall ? '跌倒报警' : '设备报警');
         var confirmed = alert.ack === 'confirmed';
-        return '<div class="alert-item"><div class="alert-main"><span class="alert-device">' + (alert.device_name || alert.device_id) + '</span><span class="alert-badge">● ACTIVE</span></div>' +
+        return '<div class="alert-item"><div class="alert-main"><span class="alert-device">' + (alert.device_name || alert.device_id) + '</span><span class="alert-badge">● 报警中</span></div>' +
             '<div class="alert-detail"><span>报警物<b>' + subject + '</b></span><span>当前浓度<b>' + (alert.current ? alert.current.toFixed(1) + ' <small>ppm</small>' : '--') + '</b></span><span>最高浓度<b>' + (alert.max ? alert.max.toFixed(1) + ' <small>ppm</small>' : '--') + '</b></span></div>' +
             '<div class="alert-time">' + alert.group + ' · ' + alert.started_at + ' · 已持续 ' + formatDuration(alert.duration) + (alert.fall ? ' · <span class="fall-flag">跌倒信号</span>' : '') + '</div>' +
             '<div class="alert-actions"><span class="ack-pill' + (confirmed ? ' confirmed' : '') + '">' + (confirmed ? '已确认' : '未确认') + '</span>' +
@@ -219,16 +219,34 @@ function renderDevices(devices) {
     }).join('');
 }
 
-function renderCommands(commands) {
+function renderCommands(commands, devices) {
+    var deviceNames = Object.create(null);
+    (devices || []).forEach(function (device) { deviceNames[device.id] = device.name || device.id; });
+    function deviceLabel(id) { return deviceNames[id] || id; }
+    var actionNames = {
+        evacuate: '立即撤离', assemble: '集合', silent_on: '开启静默', silent_off: '解除静默',
+        goto: '前往指定位置', pollution_source: '更新模拟浓度', pollution_source_clear: '清除模拟浓度',
+        '参数配置': '动作指令'
+    };
+    var reasonNames = { 'ack timeout': '设备未在规定时间内回复', offline: '设备离线', 'device offline': '设备离线' };
     var html = commands.map(function (command) {
         var pending = command.result === 'pending';
-        var resultText = { success: '成功', failed: '失败', timeout: '超时', pending: '执行中' }[command.result] || command.result;
+        var resultText = { success: '执行成功', failed: '执行失败', timeout: '设备响应超时', pending: '等待设备执行' }[command.result] || '状态未知';
+        var targets = (command.results || []).map(function (result) { return deviceLabel(result.device_id); });
+        if (!targets.length) {
+            targets = String(command.target || '').split(',').filter(Boolean).map(deviceLabel);
+        }
+        var targetText = targets.length > 1 ? targets.length + ' 台设备' : (targets[0] || '设备');
+        var progress = Math.max(0, Math.min(100, Number(command.progress) || 0));
         var deviceResults = (command.results || []).map(function (result) {
-            var text = { success: '成功', failed: '失败', timeout: '超时', pending: '等待 ACK' }[result.result] || result.result;
-            return '<span class="command-result command-result-' + result.result + '">' + result.device_id + ' · ' + text + (result.reason ? ' · ' + result.reason : '') + '</span>';
+            var state = { success: 'success', failed: 'failed', timeout: 'timeout', pending: 'pending' }[result.result] || 'pending';
+            var text = { success: '执行成功', failed: '执行失败', timeout: '响应超时', pending: '等待设备回复' }[result.result] || '状态未知';
+            var reason = result.reason ? (reasonNames[result.reason] || result.reason) : '';
+            return '<span class="command-result command-result-' + state + '">' + escapeHtml(deviceLabel(result.device_id)) + ' · ' + text + (reason ? ' · ' + escapeHtml(reason) : '') + '</span>';
         }).join('');
-        return '<div class="command-item ' + (pending ? 'command-pending' : '') + '"><div class="command-line"><span>' + command.action + ' · ' + command.target + '</span><span>' + resultText + ' ' + command.progress + '%</span></div><div class="progress-track"><i style="width:' + command.progress + '%"></i></div><div class="command-results">' + deviceResults + '</div><div class="command-id">' + command.id + '</div></div>';
+        return '<div class="command-item ' + (pending ? 'command-pending' : '') + '"><div class="command-line"><span>' + escapeHtml(actionNames[command.action] || command.action || '设备指令') + ' · ' + escapeHtml(targetText) + '</span><span>' + resultText + '</span></div><div class="progress-track" role="progressbar" aria-label="设备执行进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + progress + '"><i style="width:' + progress + '%"></i></div><div class="command-results">' + deviceResults + '</div></div>';
     }).join('');
+    if (!html) { html = '<div class="empty-state">暂无指令执行记录</div>'; }
     ['command-list', 'dashboard-command-list'].forEach(function (id) { var el = $(id); if (el) { el.innerHTML = html; } });
 }
 
@@ -262,7 +280,7 @@ function renderActiveTrainings(trainings) {
                 '<div class="active-training-coordinates">源点坐标　' + escapeHtml(source.lat) + ', ' + escapeHtml(source.lng) + '</div></div>'
             : '<div class="active-training-no-source">未配置模拟污染源</div>';
         return '<div class="training-item active-training-card training-item-' + escapeHtml(training.status) + '">' +
-            '<div class="training-item-head"><div class="active-training-title"><span class="active-training-label">TRAINING SESSION</span><strong>' + escapeHtml(training.name) + '</strong></div>' +
+            '<div class="training-item-head"><div class="active-training-title"><span class="active-training-label">当前训练</span><strong>' + escapeHtml(training.name) + '</strong></div>' +
                 '<span class="training-state training-' + escapeHtml(training.status) + '"><i class="active-training-indicator"></i>' + statusText + '</span></div>' +
             '<div class="active-training-details"><span><small>参训编队</small><b>' + escapeHtml(training.group) + '</b></span>' +
                 '<span><small>参训设备</small><b>' + (training.devices || []).length + ' 台</b></span>' +
@@ -291,7 +309,7 @@ function renderMarkers(devices) {
     });
     visibleDevices.forEach(function (device) {
         var icon = L.divIcon({ className: '', html: '<div class="marker-wrap"><div class="device-marker ' + device.status + '"></div><span>' + escapeHtml(device.name || device.id) + '</span></div>', iconSize: [120, 38], iconAnchor: [10, 19] });
-        L.marker(wgs84ToGcj02(device.lat, device.lng), { icon: icon }).bindPopup('<strong>' + escapeHtml(device.name) + '</strong><br>编号：' + escapeHtml(device.id) + '<br>编队：' + escapeHtml(device.group || '未分组') + '<br>状态：' + ({normal:'正常',alert:'报警',offline:'离线'}[device.status] || device.status) + '<br>物质：' + escapeHtml(device.substance || '—') + '<br>浓度：' + device.conc.toFixed(1) + ' ppm<br>电量：' + device.battery + '%<br>RSSI：' + device.rssi + ' dBm').addTo(markers);
+        L.marker(wgs84ToGcj02(device.lat, device.lng), { icon: icon }).bindPopup('<strong>' + escapeHtml(device.name) + '</strong><br>编号：' + escapeHtml(device.id) + '<br>编队：' + escapeHtml(device.group || '未分组') + '<br>状态：' + ({normal:'正常',alert:'报警',offline:'离线'}[device.status] || device.status) + '<br>物质：' + escapeHtml(device.substance || '—') + '<br>浓度：' + device.conc.toFixed(1) + ' ppm<br>电量：' + device.battery + '%<br>信号强度：' + device.rssi + ' dBm').addTo(markers);
     });
     var viewKey = visibleDevices.map(function (device) { return device.id + ':' + device.lat + ',' + device.lng; }).sort().join('|');
     if (viewKey && viewKey !== markerViewKey) {
@@ -407,7 +425,7 @@ function renderSnapshot(snapshot) {
     setText('map-updated', '数据更新 ' + new Date(snapshot.updated_at).toLocaleTimeString('zh-CN', { hour12: false }));
     renderAlerts(snapshot.alerts || []);
     renderDevices(snapshot.devices || []);
-    renderCommands(snapshot.commands || []);
+    renderCommands(snapshot.commands || [], snapshot.devices || []);
     renderTrainings(snapshot.trainings || []);
     renderActiveTrainings(snapshot.trainings || []);
     renderMarkers(snapshot.devices || []);
@@ -737,7 +755,7 @@ $('single-command-form').addEventListener('submit', function (e) {
     try { message = readMessage('single-fields', type); } catch (err) { feedback.textContent = err.message; feedback.className = 'feedback error'; return; }
     feedback.textContent = '下发中…'; feedback.className = 'feedback';
     apiRequest('POST', '/api/dashboard/commands', { device_id: deviceId, type: type, message: message }).then(function (res) {
-        feedback.textContent = '已下发，command_id: ' + (res && res.id ? res.id : '-'); feedback.className = 'feedback success';
+        feedback.textContent = type === 0 ? '通知已发送' : '指令已发送，请在执行记录中查看结果'; feedback.className = 'feedback success';
         toast('指令已下发'); refresh();
     }).catch(function (err) {
         feedback.textContent = err.message; feedback.className = 'feedback error';
@@ -755,7 +773,7 @@ $('group-command-form').addEventListener('submit', function (e) {
     try { message = readMessage('group-fields', type); } catch (err) { feedback.textContent = err.message; feedback.className = 'feedback error'; return; }
     feedback.textContent = '下发中…'; feedback.className = 'feedback';
     apiRequest('POST', '/api/dashboard/groups/' + encodeURIComponent(group) + '/commands', { type: type, message: message }).then(function (res) {
-        feedback.textContent = '已下发，command_id: ' + (res && res.id ? res.id : '-'); feedback.className = 'feedback success';
+        feedback.textContent = type === 0 ? '通知已发送' : '指令已发送，请在执行记录中查看结果'; feedback.className = 'feedback success';
         toast('编队指令已下发'); refresh();
     }).catch(function (err) {
         feedback.textContent = err.message; feedback.className = 'feedback error';
