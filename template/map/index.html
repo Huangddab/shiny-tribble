@@ -96,7 +96,7 @@
                             <div class="panel-heading">
                                 <div><span class="section-kicker">COMMAND LOOP</span>
                                     <h2>指令执行记录</h2>
-                                </div><span class="subtle-label">Notify ACK</span>
+                                </div><span class="subtle-label">设备执行反馈</span>
                             </div>
                             <div id="dashboard-command-list" class="command-list"></div>
                         </article>
@@ -119,10 +119,10 @@
                                     <th>状态</th>
                                     <th>模式</th>
                                     <th>检测物质</th>
-                                    <th>PID / 阈值</th>
+                                    <th>浓度 / 报警阈值</th>
                                     <th>电量</th>
-                                    <th>RSSI</th>
-                                    <th>GNSS</th>
+                                    <th>信号强度</th>
+                                    <th>定位状态</th>
                                     <th>最近上报</th>
                                 </tr>
                             </thead>
@@ -186,7 +186,7 @@
                                     <div class="form-row">
                                         <label>下发目标<select id="single-device" required></select></label>
                                         <label>指令类型<select id="single-type">
-                                                <option value="0">固定文本通知</option>
+                                                <option value="0">状态通知</option>
                                                 <option value="1">动作指令</option>
                                                 <option value="3">模式切换</option>
                                             </select></label>
@@ -208,7 +208,7 @@
                                     <div class="form-row">
                                         <label>目标编队<select id="group-target" required></select></label>
                                         <label>指令类型<select id="group-type">
-                                                <option value="0">固定文本通知</option>
+                                                <option value="0">状态通知</option>
                                                 <option value="1">动作指令</option>
                                                 <option value="3">模式切换</option>
                                             </select></label>
@@ -304,7 +304,7 @@
                             <label>结束时间<input type="datetime-local" id="history-to"></label>
                         </div>
                         <div class="form-actions"><button type="submit" class="btn btn-primary">查询记录</button><button
-                                type="button" class="btn" id="history-export-btn">导出 JSON</button><span class="feedback"
+                                type="button" class="btn" id="history-export-btn">导出记录</button><span class="feedback"
                                 id="history-feedback"></span></div>
                     </form>
                 </article>
@@ -339,7 +339,7 @@
                 <div class="subpage-heading">
                     <div><span class="section-kicker">DEVICE REGISTRY</span>
                         <h2>设备列表</h2>
-                        <p>全部设备实时遥测、编队分配与重命名管理。</p>
+                        <p>查看设备实时数据，管理名称和所属编队。</p>
                     </div>
                 </div>
                 <div class="device-summary">
@@ -374,10 +374,10 @@
                                     <th>编队</th>
                                     <th>状态</th>
                                     <th>模式</th>
-                                    <th>PID / 阈值</th>
+                                    <th>浓度 / 报警阈值</th>
                                     <th>电量</th>
-                                    <th>RSSI</th>
-                                    <th>GNSS</th>
+                                    <th>信号强度</th>
+                                    <th>定位状态</th>
                                     <th>最近上报</th>
                                     <th>操作</th>
                                 </tr>
@@ -445,7 +445,7 @@
                 <button type="button" class="modal-close" id="device-modal-close" aria-label="关闭">×</button>
             </div>
             <div class="device-modal-body">
-                <div class="modal-device-id" id="modal-device-id">DEVICE ID</div>
+                <div class="modal-device-id" id="modal-device-id">设备编号</div>
                 <div class="modal-field"><label for="modal-device-name">设备名称</label><input id="modal-device-name"
                         maxlength="32" placeholder="请输入设备名称"></div>
                 <div class="modal-field"><label for="modal-device-group">所属编队</label><input type="text"
