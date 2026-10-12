@@ -1,4 +1,7 @@
-var map = L.map('map-container', { minZoom: 15, maxZoom: 15, zoomControl: false, scrollWheelZoom: false, touchZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false }).setView([22.6335, 113.9035], 15);
+// TileServer GL runs on port 8081 of the same host as the dashboard.
+// Override window.CHEM_TILE_URL before this script when hosted separately.
+var offlineTileUrl = window.CHEM_TILE_URL || (window.location.protocol + '//' + window.location.hostname + ':8081/data/fuzhou/{z}/{x}/{y}.png');
+var map = L.map('map-container', { minZoom: 15, maxZoom: 15, zoomControl: false, scrollWheelZoom: false, touchZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false }).setView([26.08, 119.30], 15);
 var markers = L.layerGroup().addTo(map);
 var trainingLocationMap = null;
 var trainingSourceMarker = null;
@@ -30,7 +33,7 @@ function wgs84ToGcj02(lat, lng) {
 function ensureTrainingLocationMap() {
     if (trainingLocationMap) { return; }
     trainingLocationMap = L.map('training-location-map', { minZoom: 15, maxZoom: 15, zoomControl: false, scrollWheelZoom: false, touchZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false }).setView(map.getCenter(), 15);
-    L.tileLayer('http://192.168.5.98:8081/data/fuzhou/{z}/{x}/{y}.png', {
+    L.tileLayer(offlineTileUrl, {
         minZoom: 15, maxZoom: 15, maxNativeZoom: 15, attribution: ''
     }).addTo(trainingLocationMap);
     trainingDeviceMarkers = L.layerGroup().addTo(trainingLocationMap);
@@ -81,7 +84,7 @@ var markerViewKey = '';
 var refreshTimer = null;
 var authRequired = false;
 
-L.tileLayer('http://192.168.5.98:8081/data/fuzhou/{z}/{x}/{y}.png', { minZoom: 15, maxZoom: 15, maxNativeZoom: 15, attribution: '' }).addTo(map);
+L.tileLayer(offlineTileUrl, { minZoom: 15, maxZoom: 15, maxNativeZoom: 15, attribution: '' }).addTo(map);
 
 function $(id) { return document.getElementById(id); }
 function setText(id, value) { $(id).textContent = value; }
