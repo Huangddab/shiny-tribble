@@ -5,7 +5,8 @@ services:
     ports:
       - 8081:8080
     volumes:
-      - ./data/tileserver:/data
+      - ./data/tileserver:/data:ro
+    command: ["--file", "fuzhou.mbtiles", "--port", "8080", "--verbose"]
     networks:
       - internal-network
 
