@@ -314,9 +314,15 @@ function renderMarkers(devices) {
         var icon = L.divIcon({ className: '', html: '<div class="marker-wrap"><div class="device-marker ' + device.status + '"></div><span>' + escapeHtml(device.name || device.id) + '</span></div>', iconSize: [120, 38], iconAnchor: [10, 19] });
         L.marker(wgs84ToGcj02(device.lat, device.lng), { icon: icon }).bindPopup('<strong>' + escapeHtml(device.name) + '</strong><br>编号：' + escapeHtml(device.id) + '<br>编队：' + escapeHtml(device.group || '未分组') + '<br>状态：' + ({ normal: '正常', alert: '报警', offline: '离线' }[device.status] || device.status) + '<br>物质：' + escapeHtml(device.substance || '—') + '<br>浓度：' + device.conc.toFixed(1) + ' ppm<br>电量：' + device.battery + '%<br>信号强度：' + device.rssi + ' dBm').addTo(markers);
     });
-    var viewKey = visibleDevices.map(function (device) { return device.id + ':' + device.lat + ',' + device.lng; }).sort().join('|');
+    // Do not move the offline map to device coordinates outside the installed Fuzhou tiles.
+    // Device markers remain available; only automatic camera movement is constrained.
+    var localDevices = visibleDevices.filter(function (device) {
+        var lat = Number(device.lat), lng = Number(device.lng);
+        return lat >= 25.2049 && lat <= 26.6475 && lng >= 118.3777 && lng <= 120.5310;
+    });
+    var viewKey = localDevices.map(function (device) { return device.id + ':' + device.lat + ',' + device.lng; }).sort().join('|');
     if (viewKey && viewKey !== markerViewKey) {
-        var bounds = L.latLngBounds(visibleDevices.map(function (device) { return wgs84ToGcj02(device.lat, device.lng); }));
+        var bounds = L.latLngBounds(localDevices.map(function (device) { return wgs84ToGcj02(device.lat, device.lng); }));
         map.panTo(bounds.getCenter());
     }
     markerViewKey = viewKey;
