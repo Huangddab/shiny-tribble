@@ -1,4 +1,4 @@
-var map = L.map('map-container', { minZoom: 14, maxZoom: 18, zoomControl: false }).setView([22.6335, 113.9035], 17);
+var map = L.map('map-container', { minZoom: 15, maxZoom: 15, zoomControl: false, scrollWheelZoom: false, touchZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false }).setView([22.6335, 113.9035], 15);
 var markers = L.layerGroup().addTo(map);
 var trainingLocationMap = null;
 var trainingSourceMarker = null;
@@ -29,7 +29,7 @@ function wgs84ToGcj02(lat, lng) {
 
 function ensureTrainingLocationMap() {
     if (trainingLocationMap) { return; }
-    trainingLocationMap = L.map('training-location-map', { minZoom: 14, maxZoom: 18 }).setView(map.getCenter(), map.getZoom());
+    trainingLocationMap = L.map('training-location-map', { minZoom: 15, maxZoom: 15, zoomControl: false, scrollWheelZoom: false, touchZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false }).setView(map.getCenter(), 15);
     L.tileLayer('http://192.168.5.98:8081/data/fuzhou/{z}/{x}/{y}.png', {
         minZoom: 15, maxZoom: 15, maxNativeZoom: 15, attribution: ''
     }).addTo(trainingLocationMap);
@@ -81,7 +81,7 @@ var markerViewKey = '';
 var refreshTimer = null;
 var authRequired = false;
 
-L.tileLayer('http://192.168.5.98:8081/data/fuzhou/{z}/{x}/{y}.png', { minZoom: 14, maxZoom: 15, maxNativeZoom: 18, attribution: '' }).addTo(map);
+L.tileLayer('http://192.168.5.98:8081/data/fuzhou/{z}/{x}/{y}.png', { minZoom: 15, maxZoom: 15, maxNativeZoom: 15, attribution: '' }).addTo(map);
 
 function $(id) { return document.getElementById(id); }
 function setText(id, value) { $(id).textContent = value; }
@@ -314,7 +314,7 @@ function renderMarkers(devices) {
     var viewKey = visibleDevices.map(function (device) { return device.id + ':' + device.lat + ',' + device.lng; }).sort().join('|');
     if (viewKey && viewKey !== markerViewKey) {
         var bounds = L.latLngBounds(visibleDevices.map(function (device) { return wgs84ToGcj02(device.lat, device.lng); }));
-        map.fitBounds(bounds, { padding: [24, 24], maxZoom: 17 });
+        map.panTo(bounds.getCenter());
     }
     markerViewKey = viewKey;
 }
