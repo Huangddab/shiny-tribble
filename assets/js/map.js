@@ -30,8 +30,8 @@ function wgs84ToGcj02(lat, lng) {
 function ensureTrainingLocationMap() {
     if (trainingLocationMap) { return; }
     trainingLocationMap = L.map('training-location-map', { minZoom: 14, maxZoom: 18 }).setView(map.getCenter(), map.getZoom());
-    L.tileLayer('http://192.168.5.98:8081/data/baoan/{z}/{x}/{y}.png', {
-        minZoom: 14, maxZoom: 18, maxNativeZoom: 18, attribution: ''
+    L.tileLayer('http://192.168.5.98:8081/data/fuzhou/{z}/{x}/{y}.png', {
+        minZoom: 15, maxZoom: 15, maxNativeZoom: 15, attribution: ''
     }).addTo(trainingLocationMap);
     trainingDeviceMarkers = L.layerGroup().addTo(trainingLocationMap);
     trainingLocationMap.on('click', function (e) { setTrainingSourcePosition(e.latlng.lat, e.latlng.lng); });
@@ -81,7 +81,7 @@ var markerViewKey = '';
 var refreshTimer = null;
 var authRequired = false;
 
-L.tileLayer('http://192.168.5.98:8081/data/baoan/{z}/{x}/{y}.png', { minZoom: 14, maxZoom: 18, maxNativeZoom: 18, attribution: '' }).addTo(map);
+L.tileLayer('http://192.168.5.98:8081/data/fuzhou/{z}/{x}/{y}.png', { minZoom: 14, maxZoom: 15, maxNativeZoom: 18, attribution: '' }).addTo(map);
 
 function $(id) { return document.getElementById(id); }
 function setText(id, value) { $(id).textContent = value; }
@@ -274,22 +274,22 @@ function renderActiveTrainings(trainings) {
         var source = training.source;
         var sourceSummary = source
             ? '<div class="active-training-source"><div class="active-training-source-title"><span>模拟污染源</span><b>' + escapeHtml(source.substance) + '</b></div>' +
-                '<div class="active-training-metrics"><span><small>源点浓度</small><strong>' + escapeHtml(source.conc) + ' <em>ppm</em></strong></span>' +
-                '<span><small>最大半径</small><strong>' + escapeHtml(source.radius) + ' <em>m</em></strong></span>' +
-                '<span><small>扩散速度</small><strong>' + escapeHtml(source.speed) + ' <em>m/s</em></strong></span></div>' +
-                '<div class="active-training-coordinates">源点坐标　' + escapeHtml(source.lat) + ', ' + escapeHtml(source.lng) + '</div></div>'
+            '<div class="active-training-metrics"><span><small>源点浓度</small><strong>' + escapeHtml(source.conc) + ' <em>ppm</em></strong></span>' +
+            '<span><small>最大半径</small><strong>' + escapeHtml(source.radius) + ' <em>m</em></strong></span>' +
+            '<span><small>扩散速度</small><strong>' + escapeHtml(source.speed) + ' <em>m/s</em></strong></span></div>' +
+            '<div class="active-training-coordinates">源点坐标　' + escapeHtml(source.lat) + ', ' + escapeHtml(source.lng) + '</div></div>'
             : '<div class="active-training-no-source">未配置模拟污染源</div>';
         return '<div class="training-item active-training-card training-item-' + escapeHtml(training.status) + '">' +
             '<div class="training-item-head"><div class="active-training-title"><span class="active-training-label">当前训练</span><strong>' + escapeHtml(training.name) + '</strong></div>' +
-                '<span class="training-state training-' + escapeHtml(training.status) + '"><i class="active-training-indicator"></i>' + statusText + '</span></div>' +
+            '<span class="training-state training-' + escapeHtml(training.status) + '"><i class="active-training-indicator"></i>' + statusText + '</span></div>' +
             '<div class="active-training-details"><span><small>参训编队</small><b>' + escapeHtml(training.group) + '</b></span>' +
-                '<span><small>参训设备</small><b>' + (training.devices || []).length + ' 台</b></span>' +
-                '<span><small>开始时间</small><b>' + escapeHtml(training.started_at) + '</b></span></div>' +
+            '<span><small>参训设备</small><b>' + (training.devices || []).length + ' 台</b></span>' +
+            '<span><small>开始时间</small><b>' + escapeHtml(training.started_at) + '</b></span></div>' +
             sourceSummary +
             '<div class="active-training-actions">' +
-                (source ? '<button type="button" class="btn btn-sm active-training-edit-btn" data-source-toggle="' + id +
-                    '" aria-expanded="' + (openEditors.has(training.id) ? 'true' : 'false') + '">调整污染源</button>' : '') +
-                '<button type="button" class="btn btn-sm btn-danger" data-training-id="' + id + '">结束训练</button></div>' +
+            (source ? '<button type="button" class="btn btn-sm active-training-edit-btn" data-source-toggle="' + id +
+                '" aria-expanded="' + (openEditors.has(training.id) ? 'true' : 'false') + '">调整污染源</button>' : '') +
+            '<button type="button" class="btn btn-sm btn-danger" data-training-id="' + id + '">结束训练</button></div>' +
             (source ? '<form class="training-source-edit" data-source-training="' + id + '"' + (openEditors.has(training.id) ? '' : ' hidden') + '>' +
                 '<div class="form-row"><label>物质<input name="substance" value="' + escapeHtml(training.source.substance) + '" required></label>' +
                 '<label>源点浓度 ppm<input name="conc" type="number" step="any" min="0.01" value="' + training.source.conc + '" required></label>' +
@@ -309,7 +309,7 @@ function renderMarkers(devices) {
     });
     visibleDevices.forEach(function (device) {
         var icon = L.divIcon({ className: '', html: '<div class="marker-wrap"><div class="device-marker ' + device.status + '"></div><span>' + escapeHtml(device.name || device.id) + '</span></div>', iconSize: [120, 38], iconAnchor: [10, 19] });
-        L.marker(wgs84ToGcj02(device.lat, device.lng), { icon: icon }).bindPopup('<strong>' + escapeHtml(device.name) + '</strong><br>编号：' + escapeHtml(device.id) + '<br>编队：' + escapeHtml(device.group || '未分组') + '<br>状态：' + ({normal:'正常',alert:'报警',offline:'离线'}[device.status] || device.status) + '<br>物质：' + escapeHtml(device.substance || '—') + '<br>浓度：' + device.conc.toFixed(1) + ' ppm<br>电量：' + device.battery + '%<br>信号强度：' + device.rssi + ' dBm').addTo(markers);
+        L.marker(wgs84ToGcj02(device.lat, device.lng), { icon: icon }).bindPopup('<strong>' + escapeHtml(device.name) + '</strong><br>编号：' + escapeHtml(device.id) + '<br>编队：' + escapeHtml(device.group || '未分组') + '<br>状态：' + ({ normal: '正常', alert: '报警', offline: '离线' }[device.status] || device.status) + '<br>物质：' + escapeHtml(device.substance || '—') + '<br>浓度：' + device.conc.toFixed(1) + ' ppm<br>电量：' + device.battery + '%<br>信号强度：' + device.rssi + ' dBm').addTo(markers);
     });
     var viewKey = visibleDevices.map(function (device) { return device.id + ':' + device.lat + ',' + device.lng; }).sort().join('|');
     if (viewKey && viewKey !== markerViewKey) {
