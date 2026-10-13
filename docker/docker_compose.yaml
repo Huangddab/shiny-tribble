@@ -8,10 +8,14 @@ services:
       HTTPD_URI: ":8080"
       MQTT_BROKER: "tcp://mqtt:1883"
       TILE_SERVER_URL: "http://mapserver:8080"
-      DATABASE_URI: "mongodb://host.docker.internal:27017"
+      DATABASE_URI: "mongodb://mongo:27017"
     depends_on:
-      - mapserver
-      - mqtt
+      mapserver:
+        condition: service_started
+      mqtt:
+        condition: service_started
+      mongo:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - internal-network
@@ -23,6 +27,21 @@ services:
       - ./data/tileserver:/data:ro
     command: [ "--file", "fuzhou.mbtiles", "--port", "8080", "--verbose" ]
     restart: unless-stopped
+    networks:
+      - internal-network
+
+  mongo:
+    image: mongo:8.0
+    container_name: chem-mongodb
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
     networks:
       - internal-network
 
@@ -42,6 +61,7 @@ services:
 volumes:
   mqtt-data:
   mqtt-log:
+  mongo-data:
 
 networks:
   internal-network:

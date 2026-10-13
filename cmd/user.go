@@ -4,10 +4,12 @@ import (
 	"context"
 	"data-server/internal/database"
 	"data-server/internal/model"
+	"os"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/crypto/bcrypt"
@@ -45,6 +47,7 @@ func runUserInit(cmd *cobra.Command, args []string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	configureDatabaseFromEnv()
 	// Initialize database
 	database.InitializedDatabase(ctx)
 	defer database.Stop()
@@ -63,6 +66,7 @@ func runUserAdd(cmd *cobra.Command, args []string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	configureDatabaseFromEnv()
 	// Initialize database
 	database.InitializedDatabase(ctx)
 	defer database.Stop()
@@ -73,6 +77,12 @@ func runUserAdd(cmd *cobra.Command, args []string) {
 	}
 
 	logrus.Info("Add user successfully")
+}
+
+func configureDatabaseFromEnv() {
+	if databaseURI := os.Getenv("DATABASE_URI"); databaseURI != "" {
+		viper.Set("database.uri", databaseURI)
+	}
 }
 
 func initializeDefaultUser(ctx context.Context) error {
