@@ -1,0 +1,8 @@
+.git
+.gitignore
+.env
+**/*.mbtiles
+docker/data
+node_modules
+*.exe
+*.log
