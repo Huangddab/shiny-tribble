@@ -10,7 +10,7 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
   Write-Warning 'Complete any required Windows reboot, open Docker Desktop and accept license terms. Then rerun setup.ps1.'
   exit 0
 }
-docker info *> $null
+$dockerInfoOutput = & cmd.exe /d /c 'docker info >nul 2>&1'
 if ($LASTEXITCODE -ne 0) {
   Write-Warning 'Docker Desktop is installed but its Linux engine is not running. Open Docker Desktop and complete first-run initialization, then rerun setup.ps1.'
   exit 1
