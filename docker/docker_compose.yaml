@@ -1,12 +1,30 @@
 services:
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: chem-platform
+    ports:
+      - "8080:8080"
+    environment:
+      HTTPD_URI: ":8080"
+      MQTT_BROKER: "tcp://mqtt:1883"
+      TILE_SERVER_URL: "http://mapserver:8080"
+      DATABASE_URI: "mongodb://host.docker.internal:27017"
+    depends_on:
+      - mapserver
+      - mqtt
+    restart: unless-stopped
+    networks:
+      - internal-network
+
   mapserver:
     image: it.enboso.com:8080/wm/tileserver-gl:latest
     container_name: tileserver
-    ports:
-      - 8081:8080
     volumes:
       - ./data/tileserver:/data:ro
     command: ["--file", "fuzhou.mbtiles", "--port", "8080", "--verbose"]
+    restart: unless-stopped
     networks:
       - internal-network
 
