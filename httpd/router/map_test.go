@@ -1,6 +1,29 @@
 package router
 
-import "testing"
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/gin-gonic/gin"
+)
+
+func TestRootRedirect(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.GET("/", RootRedirect())
+
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	response := httptest.NewRecorder()
+	engine.ServeHTTP(response, request)
+
+	if response.Code != http.StatusFound {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusFound)
+	}
+	if location := response.Header().Get("Location"); location != "/map" {
+		t.Fatalf("Location = %q, want %q", location, "/map")
+	}
+}
 
 func TestWGS842Tile(t *testing.T) {
 	type args struct {

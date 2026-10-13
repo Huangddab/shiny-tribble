@@ -13,6 +13,12 @@ func MapView() gin.HandlerFunc {
 	}
 }
 
+func RootRedirect() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Redirect(http.StatusFound, "/map")
+	}
+}
+
 // WGS842Tile 将WGS84经纬度转换为指定缩放级别(zoom)下的瓦片坐标(x, y, z)
 func WGS842Tile(lat float64, lng float64, zoom int) (x int, y int, z int) {
 	// n = 2^zoom

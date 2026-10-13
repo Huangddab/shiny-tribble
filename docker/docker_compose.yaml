@@ -1,8 +1,6 @@
 services:
-  app:
-    build:
-      context: ..
-      dockerfile: Dockerfile
+  chem-platform:
+    image: chem-platform:latest
     container_name: chem-platform
     ports:
       - "8080:8080"
@@ -23,7 +21,7 @@ services:
     container_name: tileserver
     volumes:
       - ./data/tileserver:/data:ro
-    command: ["--file", "fuzhou.mbtiles", "--port", "8080", "--verbose"]
+    command: [ "--file", "fuzhou.mbtiles", "--port", "8080", "--verbose" ]
     restart: unless-stopped
     networks:
       - internal-network
