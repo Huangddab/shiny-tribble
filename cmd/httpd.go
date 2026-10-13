@@ -38,6 +38,10 @@ func initHttpdCommand() {
 }
 
 func runHttpdCommand(cmd *cobra.Command, args []string) {
+	if broker := os.Getenv("MQTT_BROKER"); broker != "" { viper.Set("mqtt.broker", broker) }
+	if dbURI := os.Getenv("DATABASE_URI"); dbURI != "" { viper.Set("database.uri", dbURI) }
+	if httpURI := os.Getenv("HTTPD_URI"); httpURI != "" { viper.Set("httpd.uri", httpURI) }
+
 	// ----- Context -----
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
