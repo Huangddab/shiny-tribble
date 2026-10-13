@@ -9,6 +9,6 @@ Write-Host "VirtualizationFirmwareEnabled: $($cpu.VirtualizationFirmwareEnabled)
 Write-Host "Admin: $admin"
 if (-not [Environment]::Is64BitOperatingSystem) { throw '64-bit Windows required.' }
 if ($os.Version -notmatch '^10\.') { throw 'Windows 10/11 required.' }
-if (-not $cpu.VirtualizationFirmwareEnabled) { Write-Warning 'Hardware virtualization appears disabled; enable in BIOS/UEFI.' }
+if (-not $cpu.VirtualizationFirmwareEnabled) { Write-Warning 'Firmware virtualization flag is false; this is not conclusive when a hypervisor is active. Check Docker Engine and Task Manager CPU virtualization status.' }
 if (-not $admin) { Write-Warning 'Administrator permissions are required for runtime installation.' }
 try { wsl --status } catch { Write-Warning 'WSL is not yet available.' }
