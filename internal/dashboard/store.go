@@ -1194,5 +1194,12 @@ func formatLastSeen(age time.Duration) string {
 	if age < time.Second {
 		return "刚刚"
 	}
-	return strconv.Itoa(int(age.Round(time.Second)/time.Second)) + "秒前"
+	seconds := int64(age / time.Second)
+	if seconds >= 3600 {
+		return strconv.FormatInt(seconds/3600, 10) + "小时前"
+	}
+	if seconds >= 60 {
+		return strconv.FormatInt(seconds/60, 10) + "分钟前"
+	}
+	return strconv.FormatInt(seconds, 10) + "秒前"
 }
