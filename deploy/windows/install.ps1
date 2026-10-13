@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 Write-Host '400C offline installer'
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { throw 'Docker Desktop is not installed. Install and start licensed Docker Desktop first.' }
-docker info *> $null
+& cmd.exe /d /c 'docker info >nul 2>&1'
 if ($LASTEXITCODE -ne 0) { throw 'Docker Engine is not running. Start Docker Desktop and select Linux containers.' }
 docker compose version
 if ($LASTEXITCODE -ne 0) { throw 'Docker Compose v2 is required.' }
