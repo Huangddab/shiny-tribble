@@ -4,6 +4,13 @@ $root=(Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 if (-not $OutputDirectory) { $OutputDirectory=Join-Path $root 'dist/400C-Platform-v1.0' }
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 Copy-Item (Join-Path $PSScriptRoot '*.ps1') $OutputDirectory -Force
+Copy-Item (Join-Path $PSScriptRoot '*.cmd') $OutputDirectory -Force
+Copy-Item (Join-Path $PSScriptRoot 'INSTALLATION.md') $OutputDirectory -Force
+New-Item -ItemType Directory -Force -Path (Join-Path $OutputDirectory 'runtime') | Out-Null
+foreach ($runtimeFile in @('DockerDesktopInstaller.exe','wsl-installer.msi')) {
+  $source=Join-Path $PSScriptRoot "runtime/$runtimeFile"
+  if (Test-Path $source) { Copy-Item $source (Join-Path $OutputDirectory "runtime/$runtimeFile") -Force }
+}
 Copy-Item (Join-Path $PSScriptRoot 'compose.yaml') $OutputDirectory -Force
 Copy-Item (Join-Path $PSScriptRoot 'README.md') $OutputDirectory -Force
 New-Item -ItemType Directory -Force -Path (Join-Path $OutputDirectory 'images'),(Join-Path $OutputDirectory 'data/tileserver'),(Join-Path $OutputDirectory 'data/mosquitto') | Out-Null
