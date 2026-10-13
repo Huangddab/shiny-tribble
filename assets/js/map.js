@@ -1,6 +1,7 @@
 // TileServer GL runs on port 8081 of the same host as the dashboard.
 // Override window.CHEM_TILE_URL before this script when hosted separately.
-var offlineTileUrl = window.CHEM_TILE_URL || (window.location.protocol + '//' + window.location.hostname + ':8081/data/fuzhou/{z}/{x}/{y}.png');
+var tileServerOrigin = window.location.protocol + '//' + window.location.hostname + ':8081';
+var offlineTileUrl = window.CHEM_TILE_URL || (tileServerOrigin + '/data/fuzhou/{z}/{x}/{y}.png');
 var map = L.map('map-container', { minZoom: 15, maxZoom: 15, zoomControl: false, scrollWheelZoom: false, touchZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false }).setView([26.08, 119.30], 15);
 var markers = L.layerGroup().addTo(map);
 var trainingLocationMap = null;
