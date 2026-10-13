@@ -5,6 +5,10 @@ import (
 	"data-server/httpd/router"
 	"data-server/internal/dashboard"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/gin-contrib/pprof"
@@ -91,7 +95,25 @@ func (s *HttpdService) Stop() error {
 }
 
 // initHandle 初始化HTTP路由和处理程序
+func tileProxyHandler() gin.HandlerFunc {
+ target := strings.TrimRight(os.Getenv("TILE_SERVER_URL"), "/")
+ if target == "" { target = "http://mapserver:8080" }
+ u, err := url.Parse(target)
+ if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" { logrus.Fatalf("invalid TILE_SERVER_URL: %q", target) }
+ proxy := httputil.NewSingleHostReverseProxy(u)
+ proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+  logrus.Errorf("tile proxy error: %v", err)
+  http.Error(w, "map tile service unavailable", http.StatusBadGateway)
+ }
+ return func(c *gin.Context) {
+  c.Request.URL.Path = strings.TrimPrefix(c.Request.URL.Path, "/tiles")
+  if c.Request.URL.Path == "" { c.Request.URL.Path = "/" }
+  proxy.ServeHTTP(c.Writer, c.Request)
+ }
+}
+
 func (s *HttpdService) initHandle() {
+	s.router.Any("/tiles/*path", tileProxyHandler())
 	s.router.POST("/api/auth/login", router.Login(s.dashboard))
 	s.router.POST("/api/auth/logout", router.RequireAuth(), router.Logout(s.dashboard))
 	s.router.GET("/api/auth/me", router.RequireAuth(), router.Me())
