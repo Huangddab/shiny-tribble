@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"data-server/internal/database"
 	"data-server/internal/model"
 	"os"
@@ -23,7 +24,7 @@ var (
 
 	userInitCmd = &cobra.Command{
 		Use:   "init",
-		Short: "Initialize default admin user",
+		Short: "Create initial administrator only when none exists",
 		Run:   runUserInit,
 	}
 
@@ -54,7 +55,7 @@ func runUserInit(cmd *cobra.Command, args []string) {
 
 	logrus.Info("Starting initialization...")
 
-	// Create or reset default admin user
+	// Create initial administrator without modifying existing accounts
 	if err := initializeDefaultUser(ctx); err != nil {
 		logrus.Fatalf("failed to initialize default user: %v", err)
 	}
@@ -86,29 +87,35 @@ func configureDatabaseFromEnv() {
 }
 
 func initializeDefaultUser(ctx context.Context) error {
-	username := "admin"
-	password := "admin"
-	email := "admin@localhost"
-
-	logrus.Infof("Checking for existing admin user...")
-
-	// Try to find existing admin user
-	result := database.FindOne("users", bson.M{"username": username})
-
-	var existingUser model.User
-	err := result.Decode(&existingUser)
-
-	if err == mongo.ErrNoDocuments {
-		// User doesn't exist, create new one
-		logrus.Infof("Admin user not found, creating new one...")
-		return createUser(ctx, username, password, email, "admin")
-	} else if err != nil {
-		return err
+	if database.GetDatabase() == nil {
+		return fmt.Errorf("database unavailable; refusing administrator initialization")
 	}
-
-	// User exists, update password
-	logrus.Infof("Admin user found, updating password...")
-	return updateUser(ctx, existingUser.ID, password, "admin")
+	var existing model.User
+	err := database.FindOne("users", bson.M{"role": "admin"}).Decode(&existing)
+	if err == nil {
+		logrus.Info("Administrator already exists; preserving accounts and passwords")
+		return nil
+	}
+	if err != mongo.ErrNoDocuments {
+		return fmt.Errorf("check administrator: %w", err)
+	}
+	// Refuse to bootstrap over an existing nonempty user database.
+	var users []model.User
+	if err := database.FindAll("users", bson.M{}, &users); err != nil {
+		return fmt.Errorf("check existing users: %w", err)
+	}
+	if len(users) != 0 {
+		return fmt.Errorf("users exist but no administrator; manual recovery required")
+	}
+	password := os.Getenv("ADMIN_PASSWORD")
+	if len(password) < 12 || len([]byte(password)) > 72 {
+		return fmt.Errorf("ADMIN_PASSWORD must be 12-72 UTF-8 bytes")
+	}
+	if err := createUser(ctx, "admin", password, "admin@localhost", "admin"); err != nil {
+		return fmt.Errorf("create initial administrator: %w", err)
+	}
+	logrus.Info("Initial administrator created")
+	return nil
 }
 
 func createUser(_ context.Context, username, password, email string, role string) error {
