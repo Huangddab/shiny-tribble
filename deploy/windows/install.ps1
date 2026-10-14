@@ -23,7 +23,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Docker image import failed.' }
 docker compose -f compose.yaml up -d --pull never
 if ($LASTEXITCODE -ne 0) { throw 'Service startup failed.' }
 Write-Host 'Checking initial administrator...'
-$statusOutput = @(docker compose -f compose.yaml run --rm --no-deps chem-platform user status 2>&1 | Out-String)
+$statusOutput = & cmd.exe /d /c 'docker compose -f compose.yaml run --rm --no-deps chem-platform user status 2>&1' | Out-String
 if ($LASTEXITCODE -ne 0) { throw "Administrator status check failed: $statusOutput" }
 if ($statusOutput -match 'INITIAL_SETUP_REQUIRED') {
   Write-Host 'No administrator exists. Set the initial admin password (minimum 12 characters, maximum 72 UTF-8 bytes).'
