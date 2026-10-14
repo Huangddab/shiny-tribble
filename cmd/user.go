@@ -29,7 +29,7 @@ var (
 		RunE:  runUserInit,
 	}
 
-	userStatusCmd = &cobra.Command{ Use: "status", Short: "Check whether an administrator exists", RunE: runUserStatus },
+	userStatusCmd = &cobra.Command{ Use: "status", Short: "Check whether an administrator exists", RunE: runUserStatus }
 
 	userAddCmd = &cobra.Command{
 		Use:   "add",
