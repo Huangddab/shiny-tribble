@@ -462,6 +462,19 @@
         </section>
     </div>
 
+    <section class="login-gate" id="setup-gate" hidden>
+      <form class="login-card" id="setup-form">
+        <span class="section-kicker">FIRST RUN SETUP</span>
+        <h2>首次使用 · 创建管理员</h2>
+        <p>账号固定为 admin。初始化凭据请从安装窗口获取，仅首次设置需要。</p>
+        <label>管理员账号<input value="admin" disabled></label>
+        <label>初始化凭据<input id="setup-token" autocomplete="off" required></label>
+        <label>管理员密码<input id="setup-password" type="password" autocomplete="new-password" minlength="12" required></label>
+        <label>确认密码<input id="setup-confirm" type="password" autocomplete="new-password" minlength="12" required></label>
+        <button type="submit" class="btn btn-primary">创建管理员</button>
+        <span class="feedback error" id="setup-feedback"></span>
+      </form>
+    </section>
     <section class="login-gate" id="login-gate" hidden>
         <form class="login-card" id="login-form">
             <span class="section-kicker">SECURE ACCESS</span>
