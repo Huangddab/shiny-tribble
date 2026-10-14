@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -25,7 +26,7 @@ var (
 	userInitCmd = &cobra.Command{
 		Use:   "init",
 		Short: "Create initial administrator only when none exists",
-		Run:   runUserInit,
+		RunE:  runUserInit,
 	}
 
 	userStatusCmd = &cobra.Command{ Use: "status", Short: "Check whether an administrator exists", RunE: runUserStatus },
@@ -33,7 +34,8 @@ var (
 	userAddCmd = &cobra.Command{
 		Use:   "add",
 		Short: "Add a new user",
-		Run:   runUserAdd,
+		Args:  cobra.ExactArgs(3),
+		RunE:  runUserAdd,
 	}
 )
 
@@ -65,51 +67,40 @@ func runUserStatus(cmd *cobra.Command, args []string) error {
 	if err != mongo.ErrNoDocuments {
 		return fmt.Errorf("administrator lookup failed: %w", err)
 	}
-	var users []model.User
-	if err := database.FindAll("users", bson.M{}, &users); err != nil {
-		return err
-	}
-	if len(users) > 0 {
+	count, err := database.GetDatabase().Collection("users").CountDocuments(ctx, bson.M{}, options.Count().SetLimit(1))
+	if err != nil { return fmt.Errorf("count users: %w", err) }
+	if count > 0 {
 		return fmt.Errorf("existing users without administrator; manual recovery required")
 	}
 	fmt.Println("INITIAL_SETUP_REQUIRED")
 	return nil
 }
 
-func runUserInit(cmd *cobra.Command, args []string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	configureDatabaseFromEnv()
-	// Initialize database
-	database.InitializedDatabase(ctx)
-	defer database.Stop()
-
-	logrus.Info("Starting initialization...")
-
-	// Create initial administrator without modifying existing accounts
-	if err := initializeDefaultUser(ctx); err != nil {
-		logrus.Fatalf("failed to initialize default user: %v", err)
-	}
-
-	logrus.Info("Initialization completed successfully")
+func runUserInit(cmd *cobra.Command, args []string) error {
+ ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+ defer cancel()
+ configureDatabaseFromEnv()
+ database.InitializedDatabase(ctx)
+ defer database.Stop()
+ if err := initializeDefaultUser(ctx); err != nil {
+  return fmt.Errorf("initialize administrator: %w", err)
+ }
+ logrus.Info("Administrator initialization check completed")
+ return nil
 }
 
-func runUserAdd(cmd *cobra.Command, args []string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	configureDatabaseFromEnv()
-	// Initialize database
-	database.InitializedDatabase(ctx)
-	defer database.Stop()
-
-	// Create or reset normal user
-	if err := createUser(ctx, args[0], args[1], "", args[2]); err != nil {
-		logrus.Fatalf("failed to add new user: %v", err)
-	}
-
-	logrus.Info("Add user successfully")
+func runUserAdd(cmd *cobra.Command, args []string) error {
+ ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+ defer cancel()
+ configureDatabaseFromEnv()
+ database.InitializedDatabase(ctx)
+ defer database.Stop()
+ if database.GetDatabase() == nil { return fmt.Errorf("database unavailable") }
+ if len(args[1]) < 12 || len([]byte(args[1])) > 72 { return fmt.Errorf("password must be at least 12 bytes and at most 72 UTF-8 bytes") }
+ if args[2] != "admin" && args[2] != "user" { return fmt.Errorf("role must be admin or user") }
+ if err := createUser(ctx, args[0], args[1], "", args[2]); err != nil { return fmt.Errorf("add user: %w", err) }
+ logrus.Info("User created")
+ return nil
 }
 
 func configureDatabaseFromEnv() {
@@ -132,15 +123,13 @@ func initializeDefaultUser(ctx context.Context) error {
 		return fmt.Errorf("check administrator: %w", err)
 	}
 	// Refuse to bootstrap over an existing nonempty user database.
-	var users []model.User
-	if err := database.FindAll("users", bson.M{}, &users); err != nil {
-		return fmt.Errorf("check existing users: %w", err)
-	}
-	if len(users) != 0 {
+	count, err := database.GetDatabase().Collection("users").CountDocuments(ctx, bson.M{}, options.Count().SetLimit(1))
+	if err != nil { return fmt.Errorf("check existing users: %w", err) }
+	if count > 0 {
 		return fmt.Errorf("users exist but no administrator; manual recovery required")
 	}
 	password := os.Getenv("ADMIN_PASSWORD")
-	if len(password) < 12 || len([]byte(password)) > 72 {
+	if len([]byte(password)) < 12 || len([]byte(password)) > 72 {
 		return fmt.Errorf("ADMIN_PASSWORD must be 12-72 UTF-8 bytes")
 	}
 	if err := createUser(ctx, "admin", password, "admin@localhost", "admin"); err != nil {
