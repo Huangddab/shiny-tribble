@@ -49,3 +49,4 @@ for ($i=0; $i -lt 60; $i++) {
 docker compose -f compose.yaml ps
 if (-not $ready) { throw 'Web readiness check failed; inspect docker compose logs.' }
 Write-Host '400C is ready: http://127.0.0.1:8080/map'
+Start-Process 'http://127.0.0.1:8080/map'
