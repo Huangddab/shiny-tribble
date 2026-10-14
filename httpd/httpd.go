@@ -121,6 +121,8 @@ func tileProxyHandler() gin.HandlerFunc {
 func (s *HttpdService) initHandle() {
 	s.router.Any("/tiles/*path", tileProxyHandler())
 	s.router.GET("/", router.RootRedirect())
+	s.router.GET("/api/setup/status", router.SetupStatus())
+	s.router.POST("/api/setup/initialize", router.SetupInitialize())
 	s.router.POST("/api/auth/login", router.Login(s.dashboard))
 	s.router.POST("/api/auth/logout", router.RequireAuth(), router.Logout(s.dashboard))
 	s.router.GET("/api/auth/me", router.RequireAuth(), router.Me())
