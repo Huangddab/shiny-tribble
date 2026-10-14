@@ -9,6 +9,7 @@ services:
       MQTT_BROKER: "tcp://mqtt:1883"
       TILE_SERVER_URL: "http://mapserver:8080"
       DATABASE_URI: "mongodb://mongo:27017"
+      SETUP_TOKEN: "${SETUP_TOKEN:-}"
     depends_on:
       mongo:
         condition: service_healthy
