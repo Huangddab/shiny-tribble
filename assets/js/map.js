@@ -950,4 +950,38 @@ $('history-export-btn').addEventListener('click', function () {
     window.open('/api/dashboard/alerts/export?' + historyParams().toString(), '_blank');
 });
 
-refresh(); updateClock(); loadCurrentUser(); refreshTimer = setInterval(refresh, 2000); setInterval(updateClock, 1000);
+function checkInitialSetup() {
+    fetch('/api/setup/status', {cache:'no-store'}).then(function (r) {
+        if (!r.ok) { throw new Error('数据库连接异常，请检查服务状态'); }
+        return r.json();
+    }).then(function (data) {
+        if (data.state === 'setup_required') {
+            if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+            $('login-gate').hidden = true;
+            $('setup-gate').hidden = false;
+            var fragment = new URLSearchParams(location.hash.slice(1));
+            if (fragment.has('setup')) { $('setup-token').value = fragment.get('setup'); history.replaceState(null, '', location.pathname + location.search); }
+        } else if (data.state === 'ready') {
+            $('setup-gate').hidden = true;
+            refresh(); loadCurrentUser();
+            if (!refreshTimer) { refreshTimer = setInterval(refresh, 2000); }
+        } else {
+            $('login-gate').hidden = true;
+            $('setup-gate').hidden = true;
+            alert('系统无法初始化：' + data.state);
+        }
+    }).catch(function (err) { $('setup-gate').hidden = true; alert(err.message); });
+}
+$('setup-form').addEventListener('submit', function (event) {
+    event.preventDefault();
+    var feedback = $('setup-feedback');
+    var pass = $('setup-password').value;
+    if (pass !== $('setup-confirm').value) { feedback.textContent = '两次密码不一致'; return; }
+    if (new TextEncoder().encode(pass).length < 12 || new TextEncoder().encode(pass).length > 72) { feedback.textContent = '密码须为 12 至 72 个 UTF-8 字节'; return; }
+    feedback.textContent = '正在创建管理员…';
+    fetch('/api/setup/initialize', {method:'POST', headers:{'Content-Type':'application/json','X-Setup-Token':$('setup-token').value},body:JSON.stringify({password:pass})})
+    .then(function (r) { return r.json().then(function (data) { if (!r.ok) {throw new Error(data.error || '初始化失败');} return data; }); })
+    .then(function () { $('setup-password').value = ''; $('setup-confirm').value = ''; $('setup-token').value = ''; feedback.textContent = ''; checkInitialSetup(); })
+    .catch(function (err) { feedback.textContent = err.message; });
+});
+updateClock(); setInterval(updateClock, 1000); checkInitialSetup();
