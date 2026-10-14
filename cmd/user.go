@@ -28,6 +28,8 @@ var (
 		Run:   runUserInit,
 	}
 
+	userStatusCmd = &cobra.Command{ Use: "status", Short: "Check whether an administrator exists", RunE: runUserStatus },
+
 	userAddCmd = &cobra.Command{
 		Use:   "add",
 		Short: "Add a new user",
@@ -38,10 +40,40 @@ var (
 func initUserCommands() {
 	// Add user init as subcommand
 	userCmd.AddCommand(userInitCmd)
+	userCmd.AddCommand(userStatusCmd)
 	// Add user command to root
 	rootCmd.AddCommand(userCmd)
 	// Add user add command with required flags
 	userCmd.AddCommand(userAddCmd)
+}
+
+func runUserStatus(cmd *cobra.Command, args []string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	configureDatabaseFromEnv()
+	database.InitializedDatabase(ctx)
+	defer database.Stop()
+	if database.GetDatabase() == nil {
+		return fmt.Errorf("database unavailable")
+	}
+	var admin model.User
+	err := database.FindOne("users", bson.M{"role": "admin"}).Decode(&admin)
+	if err == nil {
+		fmt.Println("ADMIN_EXISTS")
+		return nil
+	}
+	if err != mongo.ErrNoDocuments {
+		return fmt.Errorf("administrator lookup failed: %w", err)
+	}
+	var users []model.User
+	if err := database.FindAll("users", bson.M{}, &users); err != nil {
+		return err
+	}
+	if len(users) > 0 {
+		return fmt.Errorf("existing users without administrator; manual recovery required")
+	}
+	fmt.Println("INITIAL_SETUP_REQUIRED")
+	return nil
 }
 
 func runUserInit(cmd *cobra.Command, args []string) {
