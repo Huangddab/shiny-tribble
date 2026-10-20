@@ -98,7 +98,10 @@ func (s *HttpdService) Stop() error {
 func tileProxyHandler() gin.HandlerFunc {
 	target := strings.TrimRight(os.Getenv("TILE_SERVER_URL"), "/")
 	if target == "" {
-		target = "http://mapserver:8080"
+		target = strings.TrimRight(viper.GetString("tileserver.url"), "/")
+	}
+	if target == "" {
+		target = "http://127.0.0.1:8081"
 	}
 	u, err := url.Parse(target)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
@@ -111,6 +114,7 @@ func tileProxyHandler() gin.HandlerFunc {
 	}
 	return func(c *gin.Context) {
 		c.Request.URL.Path = strings.TrimPrefix(c.Request.URL.Path, "/tiles")
+		c.Request.URL.Path = strings.TrimSuffix(c.Request.URL.Path, ".png")
 		if c.Request.URL.Path == "" {
 			c.Request.URL.Path = "/"
 		}
@@ -120,6 +124,7 @@ func tileProxyHandler() gin.HandlerFunc {
 
 func (s *HttpdService) initHandle() {
 	s.router.Any("/tiles/*path", tileProxyHandler())
+	s.router.Any("/data/*path", tileProxyHandler())
 	s.router.GET("/", router.RootRedirect())
 	s.router.GET("/api/setup/status", router.SetupStatus())
 	s.router.POST("/api/setup/initialize", router.SetupInitialize())

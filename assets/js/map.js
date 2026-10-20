@@ -1,5 +1,5 @@
-// TileServer GL is proxied by the Go server on the same origin.
-var offlineTileUrl = window.CHEM_TILE_URL || (window.location.origin + '/tiles/data/fuzhou/{z}/{x}/{y}.png');
+// TileServer GL / Martin is proxied by the Go server on the same origin.
+var offlineTileUrl = window.CHEM_TILE_URL || (window.location.origin + '/tiles/data/fuzhou/{z}/{x}/{y}');
 var map = L.map('map-container', { minZoom: 15, maxZoom: 15, zoomControl: false, scrollWheelZoom: false, touchZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false }).setView([26.08, 119.30], 15);
 var markers = L.layerGroup().addTo(map);
 var trainingLocationMap = null;

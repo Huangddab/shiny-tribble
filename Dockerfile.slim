@@ -1,0 +1,31 @@
+FROM golang:1.25-bookworm AS builder
+
+WORKDIR /src
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -trimpath -ldflags="-s -w" \
+    -o /out/chem-platform .
+
+FROM gcr.io/distroless/static-debian12:nonroot
+
+WORKDIR /app
+
+COPY --from=builder /out/chem-platform /app/chem-platform
+COPY --from=builder /src/conf /app/conf
+COPY --from=builder /src/template /app/template
+COPY --from=builder /src/assets /app/assets
+
+ENV TZ=Asia/Shanghai
+ENV GIN_MODE=release
+
+EXPOSE 8080
+
+USER nonroot:nonroot
+
+ENTRYPOINT ["/app/chem-platform"]
+CMD ["httpd"]

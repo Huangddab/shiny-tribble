@@ -38,3 +38,6 @@ mqtt:
   client_id: "data-server"
   username: ""
   password: ""
+
+tileserver:
+  url: "http://127.0.0.1:8081"
