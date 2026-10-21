@@ -21,21 +21,25 @@ type DashboardSummary struct {
 }
 
 type DashboardDevice struct {
-	ID            string  `json:"id"`
-	Name          string  `json:"name"`
-	Group         string  `json:"group"`
-	Status        string  `json:"status"`
-	Mode          string  `json:"mode"`
-	Lat           float64 `json:"lat"`
-	Lng           float64 `json:"lng"`
-	PositionValid bool    `json:"position_valid"`
-	Conc          float64 `json:"conc"`
-	Threshold     float64 `json:"threshold"`
-	Substance     string  `json:"substance"`
-	Battery       int     `json:"battery"`
-	RSSI          int     `json:"rssi"`
-	Fall          bool    `json:"fall"`
-	LastSeen      string  `json:"last_seen"`
+	ID             string  `json:"id"`
+	Name           string  `json:"name"`
+	Group          string  `json:"group"`
+	Status         string  `json:"status"`
+	Mode           string  `json:"mode"`
+	Lat            float64 `json:"lat"`
+	Lng            float64 `json:"lng"`
+	PositionValid  bool    `json:"position_valid"`
+	Conc           float64 `json:"conc"`
+	Threshold      float64 `json:"threshold"`
+	PIDAlarm       bool    `json:"pid_alarm"`
+	Substance      string  `json:"substance"`
+	Battery        int     `json:"battery"`
+	BatteryVoltage float64 `json:"battery_voltage"`
+	RSSI           int     `json:"rssi"`
+	Speed          float64 `json:"speed"`
+	Fall           bool    `json:"fall"`
+	FallMagnitude  float64 `json:"fall_magnitude"`
+	LastSeen       string  `json:"last_seen"`
 }
 
 type DashboardAlert struct {
@@ -45,6 +49,7 @@ type DashboardAlert struct {
 	Group         string  `json:"group"`
 	Substance     string  `json:"substance"`
 	Fall          bool    `json:"fall"`
+	Magnitude     float64 `json:"magnitude,omitempty"`
 	StartedAt     string  `json:"started_at"`
 	StartedAtUnix int64   `json:"started_at_unix"`
 	Duration      int     `json:"duration"`
@@ -97,16 +102,21 @@ type DashboardPollutionSource struct {
 }
 
 type DashboardTelemetrySample struct {
-	DeviceID  string  `json:"device_id"`
-	Timestamp int64   `json:"timestamp"`
-	Mode      string  `json:"mode"`
-	Training  bool    `json:"training"`
-	Lat       float64 `json:"lat"`
-	Lng       float64 `json:"lng"`
-	Conc      float64 `json:"conc"`
-	Threshold float64 `json:"threshold"`
-	Battery   int     `json:"battery"`
-	RSSI      int     `json:"rssi"`
+	DeviceID       string  `json:"device_id"`
+	Timestamp      int64   `json:"timestamp"`
+	Mode           string  `json:"mode"`
+	Training       bool    `json:"training"`
+	Lat            float64 `json:"lat"`
+	Lng            float64 `json:"lng"`
+	Conc           float64 `json:"conc"`
+	Threshold      float64 `json:"threshold"`
+	Battery        int     `json:"battery"`
+	PIDAlarm       bool    `json:"pid_alarm"`
+	BatteryVoltage float64 `json:"battery_voltage"`
+	RSSI           int     `json:"rssi"`
+	Speed          float64 `json:"speed"`
+	Fall           bool    `json:"fall"`
+	FallMagnitude  float64 `json:"fall_magnitude"`
 }
 
 type DashboardGroup struct {

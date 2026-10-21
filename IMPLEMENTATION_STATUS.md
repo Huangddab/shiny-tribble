@@ -1,6 +1,6 @@
 # 平台业务实现清单
 
-依据《化学侦检数据平台业务逻辑说明书 V1.8》和《化学侦检设备 MQTT 通信协议 V1.2》维护。
+依据《化学侦检数据平台业务逻辑说明书 V1.8》和《化学侦检设备 MQTT 通信协议 V1.4》维护。
 
 ## 已实现
 
@@ -10,14 +10,14 @@
 - [x] `/api/dashboard/snapshot` 大屏快照接口。
 - [x] Telemetry 订阅 `chem/telemetry/+`。
 - [x] Events 订阅 `chem/events/+`。
-- [x] Telemetry 自动发现设备并更新位置、模式、PID、电量、RSSI、跌倒状态。
+- [x] Telemetry 自动发现设备并更新位置、模式、PID浓度/阈值/报警、电量/电压、RSSI、GNSS速度和跌倒状态/幅度。
 - [x] 收到 Telemetry 后设备上线。
 - [x] 15 秒无 Telemetry 后设备离线。
 - [x] Events type=0 创建或更新一个设备活动报警。
 - [x] 报警中的当前浓度和临时最高浓度的基础字段。
 - [x] 报警正常结束保留历史，并使用设备 `duration` / `peak_conc`。
 - [x] 报警离线结束记录 `offline` 原因和最后有效 Telemetry 时间。
-- [x] Notify 基础下行：UUID v7、type 3 QoS 0、其他确认类型 QoS 1。
+- [x] Notify 下行：type 0/1/3 使用 QoS 1，type 2 位置共享使用 QoS 0；所有消息 `retain=false`。
 - [x] Events type=2 ACK 和 10 秒 timeout 基础状态。
 - [x] 设备分组接口和每组 10 台容量校验。
 - [x] 设备上线后按编队定时自动位置共享，单次最多 16 台设备且不包含自身。
@@ -31,7 +31,27 @@
 - [x] 清理旧版报警历史文档，仅保留带 Unix 时间字段的新数据格式。
 - [x] 训练任务开始/结束持久化，并增加训练历史查询接口。
 - [x] 指令历史查询接口，支持结果/目标过滤，并记录 ACK 结果和超时审计字段。
-- [x] Notify type 0/1/2/4 字段校验，以及 Telemetry/Events 协议字段校验和错误日志。
+- [x] Notify type 0/1/2/3 字段校验，以及 Telemetry/Events 协议字段校验和错误日志。
+
+## MQTT 协议 V1.4 对照
+
+### 已符合
+
+- [x] 按协议订阅 Telemetry `chem/telemetry/+`（QoS 0）和 Events `chem/events/+`（QoS 1）。
+- [x] Notify 按广播 `chem/notify` 或单设备 `chem/{device_id}/notify` 下发。
+- [x] Notify type 0/1/2/3 使用协议规定的 QoS；发布消息均不保留。
+- [x] Notify 使用 Unix 秒级 `timestamp` 和 `type` / `message` 结构；type 1、type 3 指令携带 UUID v7 `id`。
+- [x] 支持 type 1 `pollution_source` / `pollution_source_clear` 与 type 3 `training` / `monitor` 模式切换。
+- [x] 支持 Events type 0 报警更新、type 1 报警结束、type 2 指令 ACK。
+- [x] 保存 Telemetry 的 `gnss.speed`、`sensor.battery.voltage`、`sensor.pid.alarm`、`gsensor.magnitude`，并保存跌倒事件的 `magnitude`。
+- [x] 校验物质/跌倒 Events 的必需字段，包括浓度、幅度、持续时间和峰值浓度。
+- [x] 设备离线阈值为 15 秒；离线时平台结束其活动报警。
+- [x] 位置共享不包含自身、仅面向同组在线设备，单次最多 16 个位置。
+
+### 字段处理范围
+
+- Telemetry 中的协议字段会被解码并保存在设备状态/遥测采样中；跌倒事件幅度会保存在报警记录中。
+- 物质与跌倒事件按协议校验各自必需字段；不符合结构的 Events 会记录日志并丢弃。
 
 ## 部分实现
 

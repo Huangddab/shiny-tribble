@@ -58,8 +58,12 @@ func CleanupLegacyData() {
 }
 
 type telemetryEnvelope struct {
-	Timestamp int64 `json:"timestamp"`
-	Message   struct {
+	Timestamp      int64   `json:"timestamp"`
+	Speed          float64 `json:"-"`
+	PIDAlarm       bool    `json:"-"`
+	BatteryVoltage float64 `json:"-"`
+	FallMagnitude  float64 `json:"-"`
+	Message        struct {
 		DeviceID string `json:"device_id"`
 		Mode     string `json:"mode"`
 		RSSI     int    `json:"rssi"`
@@ -87,9 +91,10 @@ type telemetryEnvelope struct {
 }
 
 type eventEnvelope struct {
-	Type      int   `json:"type"`
-	Timestamp int64 `json:"timestamp"`
-	Message   struct {
+	Type          int     `json:"type"`
+	Timestamp     int64   `json:"timestamp"`
+	FallMagnitude float64 `json:"-"`
+	Message       struct {
 		Names        []string `json:"names"`
 		Conc         float64  `json:"conc"`
 		FallDetected bool     `json:"fall_detected"`
@@ -621,6 +626,60 @@ func validateTelemetry(envelope telemetryEnvelope) error {
 	return nil
 }
 
+func validateTelemetryPayload(payload []byte) error {
+	var fields struct {
+		Timestamp *int64 `json:"timestamp"`
+		Message   *struct {
+			DeviceID *string `json:"device_id"`
+			Mode     *string `json:"mode"`
+			RSSI     *int    `json:"rssi"`
+			GNSS     *struct {
+				Fixed *bool    `json:"fixed"`
+				Lat   *float64 `json:"lat"`
+				Lng   *float64 `json:"lng"`
+				Speed *float64 `json:"speed"`
+			} `json:"gnss"`
+			Sensor *struct {
+				PID *struct {
+					Conc      *float64 `json:"conc"`
+					Threshold *float64 `json:"threshold"`
+					Alarm     *bool    `json:"alarm"`
+				} `json:"pid"`
+				Battery *struct {
+					Pct     *int     `json:"pct"`
+					Voltage *float64 `json:"voltage"`
+				} `json:"battery"`
+				Alarm *struct {
+					Names *[]string `json:"names"`
+				} `json:"alarm"`
+			} `json:"sensor"`
+			GSensor *struct {
+				FallDetected *bool    `json:"fall_detected"`
+				Magnitude    *float64 `json:"magnitude"`
+			} `json:"gsensor"`
+		} `json:"message"`
+	}
+	if err := json.Unmarshal(payload, &fields); err != nil {
+		return fmt.Errorf("decode telemetry fields: %w", err)
+	}
+	if fields.Timestamp == nil || fields.Message == nil ||
+		fields.Message.DeviceID == nil || strings.TrimSpace(*fields.Message.DeviceID) == "" ||
+		fields.Message.Mode == nil || (*fields.Message.Mode != "monitor" && *fields.Message.Mode != "training") ||
+		fields.Message.RSSI == nil || fields.Message.GNSS == nil ||
+		fields.Message.GNSS.Fixed == nil || fields.Message.GNSS.Lat == nil ||
+		fields.Message.GNSS.Lng == nil || fields.Message.GNSS.Speed == nil ||
+		fields.Message.Sensor == nil || fields.Message.Sensor.PID == nil ||
+		fields.Message.Sensor.PID.Conc == nil || fields.Message.Sensor.PID.Threshold == nil ||
+		fields.Message.Sensor.PID.Alarm == nil || fields.Message.Sensor.Battery == nil ||
+		fields.Message.Sensor.Battery.Pct == nil || fields.Message.Sensor.Battery.Voltage == nil ||
+		fields.Message.Sensor.Alarm == nil || fields.Message.Sensor.Alarm.Names == nil ||
+		fields.Message.GSensor == nil || fields.Message.GSensor.FallDetected == nil ||
+		fields.Message.GSensor.Magnitude == nil {
+		return fmt.Errorf("telemetry is missing one or more required protocol fields")
+	}
+	return nil
+}
+
 func validateEvent(event eventEnvelope) error {
 	if event.Timestamp <= 0 {
 		return fmt.Errorf("event timestamp is required")
@@ -642,6 +701,109 @@ func validateEvent(event eventEnvelope) error {
 		return fmt.Errorf("unsupported event type %d", event.Type)
 	}
 	return nil
+}
+
+func decodeTelemetryExtensions(payload []byte, envelope *telemetryEnvelope) error {
+	var fields struct {
+		Message struct {
+			GNSS struct {
+				Speed float64 `json:"speed"`
+			} `json:"gnss"`
+			Sensor struct {
+				PID struct {
+					Alarm bool `json:"alarm"`
+				} `json:"pid"`
+				Battery struct {
+					Voltage float64 `json:"voltage"`
+				} `json:"battery"`
+			} `json:"sensor"`
+			GSensor struct {
+				Magnitude float64 `json:"magnitude"`
+			} `json:"gsensor"`
+		} `json:"message"`
+	}
+	if err := json.Unmarshal(payload, &fields); err != nil {
+		return err
+	}
+	envelope.Speed = fields.Message.GNSS.Speed
+	envelope.PIDAlarm = fields.Message.Sensor.PID.Alarm
+	envelope.BatteryVoltage = fields.Message.Sensor.Battery.Voltage
+	envelope.FallMagnitude = fields.Message.GSensor.Magnitude
+	return nil
+}
+
+func validateEventPayload(payload []byte, event eventEnvelope) error {
+	var envelope struct {
+		Message map[string]json.RawMessage `json:"message"`
+	}
+	if err := json.Unmarshal(payload, &envelope); err != nil {
+		return fmt.Errorf("decode event message fields: %w", err)
+	}
+	message := envelope.Message
+	requiredNumber := func(field string) error {
+		raw, ok := message[field]
+		if !ok || string(raw) == "null" {
+			return fmt.Errorf("event message.%s is required and must be numeric", field)
+		}
+		var value any
+		if err := json.Unmarshal(raw, &value); err != nil || !isJSONNumber(value) {
+			return fmt.Errorf("event message.%s is required and must be numeric", field)
+		}
+		return nil
+	}
+	requiredDuration := func() error {
+		raw, ok := message["duration"]
+		if !ok || string(raw) == "null" {
+			return fmt.Errorf("event message.duration is required")
+		}
+		var duration int
+		if err := json.Unmarshal(raw, &duration); err != nil || duration < 0 {
+			return fmt.Errorf("event message.duration must be a non-negative integer")
+		}
+		return nil
+	}
+	namesPresent := false
+	if raw, ok := message["names"]; ok {
+		var names []string
+		if err := json.Unmarshal(raw, &names); err != nil || len(names) == 0 {
+			return fmt.Errorf("event message.names must be a non-empty string array")
+		}
+		namesPresent = true
+	}
+	fallRaw, fallPresent := message["fall_detected"]
+	fallDetected := false
+	if fallPresent {
+		if err := json.Unmarshal(fallRaw, &fallDetected); err != nil {
+			return fmt.Errorf("event message.fall_detected must be boolean")
+		}
+	}
+
+	switch event.Type {
+	case 0:
+		if namesPresent {
+			return requiredNumber("conc")
+		}
+		if !fallPresent || !fallDetected {
+			return fmt.Errorf("type 0 event requires names or fall_detected=true")
+		}
+		return requiredNumber("magnitude")
+	case 1:
+		if namesPresent && fallPresent {
+			return fmt.Errorf("type 1 event must describe either substance or fall end")
+		}
+		if namesPresent {
+			if err := requiredDuration(); err != nil {
+				return err
+			}
+			return requiredNumber("peak_conc")
+		}
+		if !fallPresent || fallDetected {
+			return fmt.Errorf("type 1 event requires names or fall_detected=false")
+		}
+		return requiredDuration()
+	default:
+		return nil
+	}
 }
 
 func isJSONNumber(value any) bool {
@@ -821,7 +983,15 @@ func (store *Store) handleTelemetry(_ paho.Client, message paho.Message) {
 		logrus.Warnf("invalid telemetry from %s: %v", message.Topic(), err)
 		return
 	}
+	if err := decodeTelemetryExtensions(message.Payload(), &envelope); err != nil {
+		logrus.Warnf("invalid telemetry fields from %s: %v", message.Topic(), err)
+		return
+	}
 	if err := validateTelemetry(envelope); err != nil {
+		logrus.Warnf("invalid telemetry from %s: %v", message.Topic(), err)
+		return
+	}
+	if err := validateTelemetryPayload(message.Payload()); err != nil {
 		logrus.Warnf("invalid telemetry from %s: %v", message.Topic(), err)
 		return
 	}
@@ -849,15 +1019,18 @@ func (store *Store) applyTelemetry(deviceID string, envelope telemetryEnvelope) 
 		device.device.PositionValid = true
 	}
 	device.device.Conc, device.device.Threshold = envelope.Message.Sensor.PID.Conc, envelope.Message.Sensor.PID.Threshold
+	device.device.PIDAlarm = envelope.PIDAlarm
 	device.device.Substance = strings.Join(envelope.Message.Sensor.Alarm.Names, ", ")
 	device.device.Battery, device.device.RSSI = envelope.Message.Sensor.Battery.Pct, envelope.Message.RSSI
+	device.device.BatteryVoltage, device.device.Speed = envelope.BatteryVoltage, envelope.Speed
 	device.device.Fall, device.lastSeen = envelope.Message.GSensor.FallDetected, now
+	device.device.FallMagnitude = envelope.FallMagnitude
 	if device.device.Status == "normal" && store.hasActiveAlertsLocked(deviceID) {
 		device.device.Status = "alert"
 	}
 	var sample *model.DashboardTelemetrySample
 	if now.Unix()-store.lastSampleAt[deviceID] >= 10 {
-		value := model.DashboardTelemetrySample{DeviceID: deviceID, Timestamp: now.Unix(), Mode: device.device.Mode, Training: device.device.Mode == "training", Lat: device.device.Lat, Lng: device.device.Lng, Conc: device.device.Conc, Threshold: device.device.Threshold, Battery: device.device.Battery, RSSI: device.device.RSSI}
+		value := model.DashboardTelemetrySample{DeviceID: deviceID, Timestamp: now.Unix(), Mode: device.device.Mode, Training: device.device.Mode == "training", Lat: device.device.Lat, Lng: device.device.Lng, Conc: device.device.Conc, Threshold: device.device.Threshold, Battery: device.device.Battery, PIDAlarm: device.device.PIDAlarm, BatteryVoltage: device.device.BatteryVoltage, RSSI: device.device.RSSI, Speed: device.device.Speed, Fall: device.device.Fall, FallMagnitude: device.device.FallMagnitude}
 		store.lastSampleAt[deviceID] = now.Unix()
 		store.samples = append(store.samples, value)
 		if len(store.samples) > 10000 {
@@ -880,6 +1053,22 @@ func (store *Store) handleEvent(_ paho.Client, message paho.Message) {
 	if err := validateEvent(event); err != nil {
 		logrus.Warnf("invalid event from %s: %v", message.Topic(), err)
 		return
+	}
+	if err := validateEventPayload(message.Payload(), event); err != nil {
+		logrus.Warnf("invalid event from %s: %v", message.Topic(), err)
+		return
+	}
+	if event.Type == 0 {
+		var fields struct {
+			Message struct {
+				Magnitude float64 `json:"magnitude"`
+			} `json:"message"`
+		}
+		if err := json.Unmarshal(message.Payload(), &fields); err != nil {
+			logrus.Warnf("invalid event magnitude from %s: %v", message.Topic(), err)
+			return
+		}
+		event.FallMagnitude = fields.Message.Magnitude
 	}
 	deviceID := topicDeviceID(message.Topic())
 	if deviceID == "" {
@@ -928,6 +1117,9 @@ func (store *Store) applyEvent(deviceID string, event eventEnvelope, when int64)
 			alert.Substance = strings.Join(event.Message.Names, ", ")
 		}
 		alert.Fall = alert.Fall || event.Message.FallDetected
+		if event.Message.FallDetected {
+			alert.Magnitude = event.FallMagnitude
+		}
 		if device := store.devices[deviceID]; device != nil {
 			device.device.Status = "alert"
 			alert.DeviceName, alert.Group = device.device.Name, device.device.Group

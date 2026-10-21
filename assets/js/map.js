@@ -1,6 +1,18 @@
 // TileServer GL / Martin is proxied by the Go server on the same origin.
 var offlineTileUrl = window.CHEM_TILE_URL || (window.location.origin + '/tiles/data/fuzhou/{z}/{x}/{y}');
-var map = L.map('map-container', { minZoom: 15, maxZoom: 15, zoomControl: false, scrollWheelZoom: false, touchZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false }).setView([26.08, 119.30], 15);
+var fuzhouBounds = [[25.20, 118.37], [26.65, 120.54]];
+var map = L.map('map-container', {
+    minZoom: 15,
+    maxZoom: 15,
+    maxBounds: fuzhouBounds,
+    maxBoundsViscosity: 1.0,
+    zoomControl: false,
+    scrollWheelZoom: false,
+    touchZoom: false,
+    doubleClickZoom: false,
+    boxZoom: false,
+    keyboard: false
+}).setView([26.08, 119.30], 15);
 var markers = L.layerGroup().addTo(map);
 var trainingLocationMap = null;
 var trainingSourceMarker = null;
@@ -105,6 +117,7 @@ function showLogin() {
 function hideLogin() {
     authRequired = false;
     $('login-gate').hidden = true;
+    if (map) { setTimeout(function () { map.invalidateSize(); }, 50); }
     refresh();
     loadCurrentUser();
     refreshTimer = setInterval(refresh, 2000);
@@ -461,6 +474,9 @@ document.querySelectorAll('.nav-btn').forEach(function (btn) {
         document.querySelectorAll('.page').forEach(function (p) { p.classList.toggle('active', p.id === 'page-' + btn.dataset.page); });
         if (btn.dataset.page === 'history' && !historyLoaded) { loadHistory(); }
         if (btn.dataset.page === 'settings') { loadUsers(); }
+        if (btn.dataset.page === 'dashboard' && map) {
+            setTimeout(function () { map.invalidateSize(); }, 50);
+        }
         if (btn.dataset.page === 'training' && trainingLocationMap) {
             setTimeout(function () { trainingLocationMap.invalidateSize(); }, 0);
         }
@@ -963,6 +979,7 @@ function checkInitialSetup() {
             if (fragment.has('setup')) { $('setup-token').value = fragment.get('setup'); history.replaceState(null, '', location.pathname + location.search); }
         } else if (data.state === 'ready') {
             $('setup-gate').hidden = true;
+            if (map) { setTimeout(function () { map.invalidateSize(); }, 50); }
             refresh(); loadCurrentUser();
             if (!refreshTimer) { refreshTimer = setInterval(refresh, 2000); }
         } else {
@@ -985,3 +1002,7 @@ $('setup-form').addEventListener('submit', function (event) {
     .catch(function (err) { feedback.textContent = err.message; });
 });
 updateClock(); setInterval(updateClock, 1000); checkInitialSetup();
+window.addEventListener('resize', function () {
+    if (map) { map.invalidateSize(); }
+    if (trainingLocationMap) { trainingLocationMap.invalidateSize(); }
+});

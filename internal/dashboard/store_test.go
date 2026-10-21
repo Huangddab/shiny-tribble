@@ -63,7 +63,7 @@ func TestSubstanceAndFallShareOneAlert(t *testing.T) {
 		Duration     int      `json:"duration"`
 		MaxConc      float64  `json:"peak_conc"`
 	}{Names: []string{"DMMP"}, Conc: 3.8}}, 200)
-	store.applyEvent("device-2", eventEnvelope{Type: 0, Timestamp: 202, Message: struct {
+	store.applyEvent("device-2", eventEnvelope{Type: 0, Timestamp: 202, FallMagnitude: 1.8, Message: struct {
 		Names        []string `json:"names"`
 		Conc         float64  `json:"conc"`
 		FallDetected bool     `json:"fall_detected"`
@@ -75,7 +75,7 @@ func TestSubstanceAndFallShareOneAlert(t *testing.T) {
 	}{FallDetected: true}}, 202)
 
 	snapshot := store.Snapshot()
-	if len(snapshot.Alerts) != 1 || !snapshot.Alerts[0].Fall || snapshot.Alerts[0].Substance != "DMMP" {
+	if len(snapshot.Alerts) != 1 || !snapshot.Alerts[0].Fall || snapshot.Alerts[0].Substance != "DMMP" || snapshot.Alerts[0].Magnitude != 1.8 {
 		t.Fatalf("expected one combined alert: %+v", snapshot.Alerts)
 	}
 	store.applyEvent("device-2", eventEnvelope{Type: 1, Timestamp: 210, Message: struct {
@@ -196,6 +196,100 @@ func TestTelemetryWithLegacyClockStillOnboardsDevice(t *testing.T) {
 	}
 	if snapshot.Devices[0].Status == "offline" {
 		t.Fatalf("expected device to be online despite legacy device clock, got %+v", snapshot.Devices[0])
+	}
+}
+
+func TestTelemetryCapturesV14Fields(t *testing.T) {
+	payload := []byte(`{"timestamp":1789720300,"message":{"device_id":"device-v14","mode":"monitor","sensor":{"pid":{"conc":2.4,"threshold":5,"alarm":true},"battery":{"pct":95,"voltage":8.3},"alarm":{"names":["DMMP"]}},"gnss":{"fixed":true,"lat":22.5,"lng":113.9,"speed":1.2},"rssi":-57,"gsensor":{"fall_detected":true,"magnitude":1.8}}}`)
+	if err := validateTelemetryPayload(payload); err != nil {
+		t.Fatalf("validate protocol fields: %v", err)
+	}
+	var envelope telemetryEnvelope
+	if err := json.Unmarshal(payload, &envelope); err != nil {
+		t.Fatalf("decode telemetry: %v", err)
+	}
+	if err := decodeTelemetryExtensions(payload, &envelope); err != nil {
+		t.Fatalf("decode protocol fields: %v", err)
+	}
+	store := NewStore()
+	store.applyTelemetry("device-v14", envelope)
+	device := store.Snapshot().Devices[0]
+	if !device.PIDAlarm || device.BatteryVoltage != 8.3 || device.Speed != 1.2 || device.FallMagnitude != 1.8 {
+		t.Fatalf("protocol fields not captured in device state: %+v", device)
+	}
+}
+
+func TestValidateTelemetryPayloadRejectsMissingProtocolFields(t *testing.T) {
+	payload := []byte(`{"timestamp":1789720300,"message":{"device_id":"device-v14","mode":"monitor"}}`)
+	if err := validateTelemetryPayload(payload); err == nil {
+		t.Fatal("expected missing telemetry fields to be rejected")
+	}
+}
+
+func TestValidateEventPayload(t *testing.T) {
+	tests := []struct {
+		name    string
+		payload string
+		event   eventEnvelope
+		wantErr bool
+	}{
+		{
+			name:    "substance alarm start",
+			payload: `{"type":0,"timestamp":1789720300,"message":{"names":["DMMP"],"conc":3.8}}`,
+			event:   eventEnvelope{Type: 0, Timestamp: 1789720300},
+		},
+		{
+			name:    "fall alarm start",
+			payload: `{"type":0,"timestamp":1789720300,"message":{"fall_detected":true,"magnitude":1.8}}`,
+			event:   eventEnvelope{Type: 0, Timestamp: 1789720300},
+		},
+		{
+			name:    "substance alarm end",
+			payload: `{"type":1,"timestamp":1789720400,"message":{"names":["DMMP"],"duration":100,"peak_conc":56}}`,
+			event:   eventEnvelope{Type: 1, Timestamp: 1789720400},
+		},
+		{
+			name:    "fall alarm end",
+			payload: `{"type":1,"timestamp":1789720400,"message":{"fall_detected":false,"duration":90}}`,
+			event:   eventEnvelope{Type: 1, Timestamp: 1789720400},
+		},
+		{
+			name:    "substance end missing peak",
+			payload: `{"type":1,"timestamp":1789720400,"message":{"names":["DMMP"],"duration":100}}`,
+			event:   eventEnvelope{Type: 1, Timestamp: 1789720400},
+			wantErr: true,
+		},
+		{
+			name:    "fall end missing explicit false",
+			payload: `{"type":1,"timestamp":1789720400,"message":{"duration":90}}`,
+			event:   eventEnvelope{Type: 1, Timestamp: 1789720400},
+			wantErr: true,
+		},
+		{
+			name:    "fall end missing duration",
+			payload: `{"type":1,"timestamp":1789720400,"message":{"fall_detected":false}}`,
+			event:   eventEnvelope{Type: 1, Timestamp: 1789720400},
+			wantErr: true,
+		},
+		{
+			name:    "substance start missing concentration",
+			payload: `{"type":0,"timestamp":1789720300,"message":{"names":["DMMP"]}}`,
+			event:   eventEnvelope{Type: 0, Timestamp: 1789720300},
+			wantErr: true,
+		},
+		{
+			name:    "fall start missing magnitude",
+			payload: `{"type":0,"timestamp":1789720300,"message":{"fall_detected":true}}`,
+			event:   eventEnvelope{Type: 0, Timestamp: 1789720300},
+			wantErr: true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if err := validateEventPayload([]byte(test.payload), test.event); (err != nil) != test.wantErr {
+				t.Fatalf("validateEventPayload() error = %v, wantErr %v", err, test.wantErr)
+			}
+		})
 	}
 }
 

@@ -4,10 +4,13 @@ import (
 	"context"
 	"data-server/httpd/router"
 	"data-server/internal/dashboard"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -22,6 +25,61 @@ type HttpdService struct {
 	router    *gin.Engine
 	server    *http.Server
 	dashboard *dashboard.Store
+	tileCmd   *exec.Cmd
+}
+
+func ensureTileServer(ctx context.Context) *exec.Cmd {
+	target := strings.TrimRight(os.Getenv("TILE_SERVER_URL"), "/")
+	if target == "" {
+		target = strings.TrimRight(viper.GetString("tileserver.url"), "/")
+	}
+	if target == "" {
+		target = "http://127.0.0.1:8081"
+	}
+
+	if strings.Contains(target, "127.0.0.1:8081") || strings.Contains(target, "localhost:8081") {
+		conn, err := net.DialTimeout("tcp", "127.0.0.1:8081", 300*time.Millisecond)
+		if err == nil {
+			conn.Close()
+			logrus.Info("TileServer is already running on 127.0.0.1:8081")
+			return nil
+		}
+
+		execDir, err := filepath.Abs(filepath.Dir(os.Args[0]))
+		if err != nil {
+			execDir = "."
+		}
+		martinPath := filepath.Join(execDir, "services", "tileserver", "martin.exe")
+		dataPath := filepath.Join(execDir, "data", "tileserver")
+
+		if _, err := os.Stat(martinPath); err != nil {
+			martinPath = filepath.Join("services", "tileserver", "martin.exe")
+			dataPath = filepath.Join("data", "tileserver")
+		}
+
+		if _, err := os.Stat(martinPath); err == nil {
+			logrus.Infof("Starting tile server: %s with data: %s", martinPath, dataPath)
+			cmd := exec.CommandContext(ctx, martinPath, "--route-prefix", "/data", "-l", "127.0.0.1:8081", dataPath)
+			cmd.Dir = execDir
+			if err := cmd.Start(); err != nil {
+				logrus.Errorf("failed to start tile server: %v", err)
+			} else {
+				for i := 0; i < 30; i++ {
+					c, e := net.DialTimeout("tcp", "127.0.0.1:8081", 100*time.Millisecond)
+					if e == nil {
+						c.Close()
+						logrus.Info("Tile server is ready on 127.0.0.1:8081")
+						break
+					}
+					time.Sleep(100 * time.Millisecond)
+				}
+				return cmd
+			}
+		} else {
+			logrus.Warnf("tile server binary not found at %s", martinPath)
+		}
+	}
+	return nil
 }
 
 func NewService(parent context.Context) *HttpdService {
@@ -38,6 +96,9 @@ func NewService(parent context.Context) *HttpdService {
 		pprof.Register(router)
 	}
 
+	// 确保地图瓦片服务已就绪
+	tileCmd := ensureTileServer(parent)
+
 	// 创建HTTP服务器
 	httpServer := &http.Server{
 		Addr:    viper.GetString("httpd.uri"),
@@ -48,6 +109,7 @@ func NewService(parent context.Context) *HttpdService {
 		router:    router,
 		server:    httpServer,
 		dashboard: dashboard.NewStore(),
+		tileCmd:   tileCmd,
 	}
 	service.initHandle()
 	if err := service.dashboard.Subscribe(); err != nil {
@@ -86,6 +148,10 @@ func runCommandRetentionJob(ctx context.Context, store *dashboard.Store) {
 func (s *HttpdService) Stop() error {
 	ctx, cancel := context.WithTimeout(s.ctx, time.Second*5)
 	defer cancel()
+
+	if s.tileCmd != nil && s.tileCmd.Process != nil {
+		_ = s.tileCmd.Process.Kill()
+	}
 
 	if err := s.server.Shutdown(ctx); err != nil {
 		logrus.Errorf("failed to shutdown server: %v", err)

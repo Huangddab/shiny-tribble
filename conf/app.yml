@@ -23,7 +23,7 @@ session:
   secure: false
 
 database:
-  uri: "mongodb://localhost:27017"
+  uri: "mongodb://127.0.0.1:27017"
   dbname: "data_server"
   log: 4
 
